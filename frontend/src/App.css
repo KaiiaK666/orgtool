@@ -153,6 +153,11 @@ a {
   gap: 28px;
 }
 
+.login-card--simple {
+  width: min(920px, 100%);
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.8fr);
+}
+
 .login-hero,
 .login-panel,
 .brand-copy,
@@ -271,12 +276,12 @@ a {
 }
 
 .login-card h1 {
-  font-size: clamp(2.4rem, 4vw, 4.4rem);
-  max-width: 9ch;
+  font-size: clamp(2.35rem, 4vw, 4rem);
+  max-width: 10ch;
 }
 
 .login-panel__head h2 {
-  font-size: 1.9rem;
+  font-size: 1.65rem;
 }
 
 .brand-copy p,
@@ -304,12 +309,6 @@ a {
 
 .login-panel__head {
   justify-content: space-between;
-  gap: 12px;
-}
-
-.login-user-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -565,6 +564,22 @@ a {
   font-family: "Space Grotesk", sans-serif;
 }
 
+.stat-card--pending {
+  background: linear-gradient(180deg, var(--panel), var(--pending-bg));
+  border-color: var(--pending-line);
+}
+
+.stat-card--urgent,
+.stat-card--overdue {
+  background: linear-gradient(180deg, var(--panel), var(--danger-bg));
+  border-color: var(--danger-line);
+}
+
+.stat-card--done {
+  background: linear-gradient(180deg, var(--panel), var(--success-bg));
+  border-color: var(--success-line);
+}
+
 .dashboard-grid,
 .project-grid {
   display: grid;
@@ -596,6 +611,21 @@ a {
   height: 5px;
   background: var(--project-accent, var(--accent));
   opacity: 0.95;
+}
+
+.project-card--overdue {
+  background: linear-gradient(180deg, var(--panel), color-mix(in srgb, var(--danger-bg) 70%, var(--panel)));
+  border-color: var(--danger-line);
+}
+
+.project-card--pending {
+  background: linear-gradient(180deg, var(--panel), color-mix(in srgb, var(--pending-bg) 75%, var(--panel)));
+  border-color: var(--pending-line);
+}
+
+.project-card--done {
+  background: linear-gradient(180deg, var(--panel), color-mix(in srgb, var(--success-bg) 78%, var(--panel)));
+  border-color: var(--success-line);
 }
 
 .project-chip,
@@ -703,17 +733,17 @@ a {
 }
 
 .activity-row--overdue {
-  background: var(--danger-bg);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--danger-bg) 88%, white), var(--danger-bg));
   border-color: var(--danger-line);
 }
 
 .activity-row--pending {
-  background: var(--pending-bg);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--pending-bg) 86%, white), var(--pending-bg));
   border-color: var(--pending-line);
 }
 
 .activity-row--done {
-  background: var(--success-bg);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--success-bg) 86%, white), var(--success-bg));
   border-color: var(--success-line);
 }
 
@@ -731,6 +761,21 @@ a {
   background: linear-gradient(180deg, var(--surface), var(--panel-soft));
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
+}
+
+.board-hero--overdue {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--danger-bg) 75%, var(--surface)), var(--panel-soft));
+  border-color: var(--danger-line);
+}
+
+.board-hero--pending {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--pending-bg) 70%, var(--surface)), var(--panel-soft));
+  border-color: var(--pending-line);
+}
+
+.board-hero--done {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--success-bg) 72%, var(--surface)), var(--panel-soft));
+  border-color: var(--success-line);
 }
 
 .board-hero__controls {
@@ -846,6 +891,43 @@ a {
   border-spacing: 0 10px;
 }
 
+.col-task {
+  width: 27rem;
+}
+
+.col-priority {
+  width: 9rem;
+}
+
+.col-status {
+  width: 8.5rem;
+}
+
+.col-date {
+  width: 8rem;
+}
+
+.col-owner {
+  width: 10rem;
+}
+
+.col-notes {
+  width: 16rem;
+}
+
+.col-custom--number,
+.col-custom--date {
+  width: 8.5rem;
+}
+
+.col-custom--tag {
+  width: 10rem;
+}
+
+.col-custom--text {
+  width: 12rem;
+}
+
 .board-table th {
   padding: 0 10px 8px;
   text-align: left;
@@ -865,11 +947,12 @@ a {
   background: var(--surface-muted);
   border-top: 1px solid transparent;
   border-bottom: 1px solid transparent;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .task-row td:first-child {
   border-radius: 16px 0 0 16px;
-  border-left: 5px solid transparent;
+  border-left: 8px solid transparent;
 }
 
 .task-row td:last-child {
@@ -877,7 +960,7 @@ a {
 }
 
 .task-row--overdue td {
-  background: var(--danger-bg);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--danger-bg) 92%, white), var(--danger-bg));
 }
 
 .task-row--overdue td:first-child {
@@ -885,7 +968,7 @@ a {
 }
 
 .task-row--pending td {
-  background: var(--pending-bg);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--pending-bg) 92%, white), var(--pending-bg));
 }
 
 .task-row--pending td:first-child {
@@ -893,7 +976,7 @@ a {
 }
 
 .task-row--done td {
-  background: var(--success-bg);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--success-bg) 92%, white), var(--success-bg));
 }
 
 .task-row--done td:first-child {
@@ -902,7 +985,7 @@ a {
 
 .cell-input,
 .cell-select {
-  min-width: 120px;
+  min-width: 0;
   padding: 10px 12px;
   border-radius: 12px;
   font-size: 0.95rem;
@@ -919,8 +1002,11 @@ a {
 }
 
 .cell-input--task {
-  min-width: 240px;
   font-weight: 700;
+}
+
+.cell-input--date {
+  max-width: 8rem;
 }
 
 .cell-input--tagged {

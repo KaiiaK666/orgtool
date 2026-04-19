@@ -87,6 +87,14 @@ function boardProgress(board) {
   return { total, done, percent: total ? Math.round((done / total) * 100) : 0 };
 }
 
+function boardTone(board) {
+  const tasks = board.tasks || [];
+  if (tasks.some((task) => visualStatus(task) === "Overdue")) return "Overdue";
+  if (tasks.some((task) => visualStatus(task) === "Pending")) return "Pending";
+  if (tasks.length && tasks.every((task) => visualStatus(task) === "Done")) return "Done";
+  return "Pending";
+}
+
 function relevantBoards(boards, user) {
   if (!user) return boards;
   if (user.role === "Admin") return boards;
@@ -136,6 +144,7 @@ function blankProject(user) {
 function blankUser() {
   return {
     name: "",
+    username: "",
     title: "",
     role: "Staff",
     department: "General",
@@ -154,83 +163,49 @@ function ThemeToggle({ theme, onToggle, compact = false }) {
   );
 }
 
-function LoginScreen({
-  users,
-  selectedUserId,
-  onSelectUser,
-  password,
-  onPasswordChange,
-  onSubmit,
-  error,
-  busy,
-  theme,
-  onToggleTheme,
-}) {
-  const activeUsers = users.filter((user) => user.active !== false);
-  const selectedUser = activeUsers.find((user) => Number(user.id) === Number(selectedUserId)) || activeUsers[0] || null;
-
+function LoginScreen({ username, onUsernameChange, password, onPasswordChange, onSubmit, error, busy, theme, onToggleTheme }) {
   return (
     <div className="login-screen">
       <div className="login-screen__actions">
         <ThemeToggle theme={theme} onToggle={onToggleTheme} />
       </div>
 
-      <div className="login-card">
+      <div className="login-card login-card--simple">
         <section className="login-hero">
           <div className="brand-lockup brand-lockup--login">
             <img className="brand-mark brand-mark--large" src={LOGO_SRC} alt="Organization Tool logo" />
             <div className="brand-copy">
               <span className="eyebrow">Organization Tool</span>
               <h1>Dealership organizational tool</h1>
-              <p>Simple projects, clean task groups, fast status changes, and a login screen your team can understand without training.</p>
+              <p>Simple projects, clean task groups, faster status scanning, and a login flow that stays out of the way.</p>
             </div>
           </div>
 
           <div className="login-note">
-            <strong>Sign-in flow</strong>
-            <p>Pick a profile, enter the password for that user, and go straight into that person’s workspace.</p>
+            <strong>Sign in with your username</strong>
+            <p>Use the username assigned in Admin, enter your password, and go straight into your workspace.</p>
           </div>
         </section>
 
         <section className="login-panel">
           <div className="login-panel__head">
             <div>
-              <span className="eyebrow">Choose profile</span>
-              <h2>{selectedUser ? selectedUser.name : "Workspace login"}</h2>
+              <span className="eyebrow">Sign in</span>
+              <h2>Workspace login</h2>
             </div>
-            {selectedUser ? <span className={cls("pill", `pill--${tone(selectedUser.role)}`)}>{selectedUser.title || selectedUser.role}</span> : null}
-          </div>
-
-          <div className="login-user-grid">
-            {activeUsers.map((user) => (
-              <button
-                key={user.id}
-                type="button"
-                className={cls("login-user", Number(selectedUserId) === Number(user.id) && "is-active")}
-                onClick={() => onSelectUser(user.id)}
-              >
-                <span className="avatar">{user.avatar || initials(user.name)}</span>
-                <div>
-                  <strong>{user.name}</strong>
-                  <small>{user.title || user.department}</small>
-                </div>
-              </button>
-            ))}
           </div>
 
           <form className="login-form" onSubmit={onSubmit}>
             <label>
+              <span>Username</span>
+              <input type="text" autoComplete="username" placeholder="admin" value={username} onChange={(event) => onUsernameChange(event.target.value)} />
+            </label>
+            <label>
               <span>Password</span>
-              <input
-                type="password"
-                autoComplete="current-password"
-                placeholder={selectedUser ? `Password for ${selectedUser.name}` : "Password"}
-                value={password}
-                onChange={(event) => onPasswordChange(event.target.value)}
-              />
+              <input type="password" autoComplete="current-password" placeholder="Password" value={password} onChange={(event) => onPasswordChange(event.target.value)} />
             </label>
             {error ? <div className="error-banner">{error}</div> : null}
-            <button type="submit" disabled={busy || !selectedUserId || !password.trim()}>
+            <button type="submit" disabled={busy || !username.trim() || !password.trim()}>
               {busy ? "Entering..." : "Enter Workspace"}
             </button>
           </form>
@@ -257,19 +232,19 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
   return (
     <div className="dashboard-view">
       <section className="stats">
-        <article className="stat-card">
+        <article className="stat-card stat-card--pending">
           <span>Assigned</span>
           <strong>{myTasks.length}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card stat-card--urgent">
           <span>Urgent</span>
           <strong>{urgent.length}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card stat-card--overdue">
           <span>Overdue</span>
           <strong>{overdue.length}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card stat-card--done">
           <span>Projects</span>
           <strong>{boards.length}</strong>
         </article>
@@ -341,16 +316,18 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
         <div className="project-grid">
           {boards.map((board) => {
             const progress = boardProgress(board);
+            const toneName = tone(boardTone(board));
             return (
               <button
                 key={board.id}
                 type="button"
-                className="project-card"
+                className={cls("project-card", `project-card--${toneName}`)}
                 style={{ "--project-accent": board.color || "#3156f5" }}
                 onClick={() => onOpenBoard(board.id)}
               >
                 <div className="project-card__top">
                   <span className={cls("project-chip", `project-chip--${tone(board.department)}`)}>{board.department}</span>
+                  <span className={cls("pill", `pill--${toneName}`)}>{boardTone(board)}</span>
                 </div>
                 <strong>{board.name}</strong>
                 <p>{board.description || "No description yet."}</p>
@@ -419,7 +396,7 @@ function TaskRow({ task, board, users, onUpdateTask }) {
         </select>
       </td>
       <td>
-        <input className="cell-input" type="date" defaultValue={task.due_date || ""} onBlur={(event) => saveField("due_date", event.target.value)} />
+        <input className="cell-input cell-input--date" type="date" defaultValue={task.due_date || ""} onBlur={(event) => saveField("due_date", event.target.value)} />
       </td>
       <td>
         <select className="cell-select" value={task.owner_id || ""} onChange={(event) => saveField("owner_id", Number(event.target.value) || null)}>
@@ -474,10 +451,18 @@ function ProjectBoard({
     setSearch("");
     setMineOnly(false);
     setQuickTasks({});
-    setGroupDraft({ name: "", color: board.color || "#3156f5" });
+    setGroupDraft({ name: "", color: board?.color || "#3156f5" });
     setShowColumnForm(false);
     setColumnDraft({ name: "", type: "text" });
-  }, [board.id, board.color]);
+  }, [board?.id, board?.color]);
+
+  if (!board) {
+    return (
+      <section className="panel">
+        <div className="empty-state">Create a project to start building task groups.</div>
+      </section>
+    );
+  }
 
   function visibleTasksForGroup(groupId) {
     return sortTasks(
@@ -518,17 +503,9 @@ function ProjectBoard({
     setGroupDraft((current) => ({ ...current, name: "" }));
   }
 
-  if (!board) {
-    return (
-      <section className="panel">
-        <div className="empty-state">Create a project to start building task groups.</div>
-      </section>
-    );
-  }
-
   return (
     <div className="project-board">
-      <section className="board-hero">
+      <section className={cls("board-hero", `board-hero--${tone(boardTone(board))}`)}>
         <div>
           <span className="eyebrow">{board.department}</span>
           <h2>{board.name}</h2>
@@ -600,6 +577,17 @@ function ProjectBoard({
 
               <div className="board-table-wrap">
                 <table className="board-table">
+                  <colgroup>
+                    <col className="col-task" />
+                    <col className="col-priority" />
+                    <col className="col-status" />
+                    <col className="col-date" />
+                    <col className="col-owner" />
+                    <col className="col-notes" />
+                    {board.fields.map((field) => (
+                      <col key={`column-width-${field.id}`} className={cls("col-custom", `col-custom--${field.type}`)} />
+                    ))}
+                  </colgroup>
                   <thead>
                     <tr>
                       <th>Task</th>
@@ -670,6 +658,7 @@ function AdminView({ data, currentUser, onCreateUser, onUpdateUser, onDeleteUser
           user.id,
           {
             name: user.name || "",
+            username: user.username || "",
             title: user.title || "",
             role: user.role || "Staff",
             department: user.department || "General",
@@ -694,11 +683,13 @@ function AdminView({ data, currentUser, onCreateUser, onUpdateUser, onDeleteUser
   async function submitNewUser(event) {
     event.preventDefault();
     const name = newUserForm.name.trim();
+    const username = newUserForm.username.trim();
     const password = newUserForm.password.trim();
-    if (!name || !password) return;
+    if (!name || !username || !password) return;
     const created = await onCreateUser({
       ...newUserForm,
       name,
+      username,
       password,
       store_id: null,
     });
@@ -710,7 +701,7 @@ function AdminView({ data, currentUser, onCreateUser, onUpdateUser, onDeleteUser
     if (!draft) return;
     const changes = {};
 
-    ["name", "title", "role", "department"].forEach((field) => {
+    ["name", "username", "title", "role", "department"].forEach((field) => {
       if (String(draft[field] || "") !== String(user[field] || "")) changes[field] = draft[field];
     });
 
@@ -733,7 +724,7 @@ function AdminView({ data, currentUser, onCreateUser, onUpdateUser, onDeleteUser
           </div>
         </div>
         <div className="manifest-copy">
-          <p>Add people, update passwords, disable logins, and preview exactly what a user sees without leaving the workspace.</p>
+          <p>Add people, update usernames and passwords, disable logins, and preview exactly what a user sees without leaving the workspace.</p>
           <p>Preview mode changes only your session. The user account itself is not altered when you switch into it.</p>
         </div>
       </section>
@@ -751,6 +742,10 @@ function AdminView({ data, currentUser, onCreateUser, onUpdateUser, onDeleteUser
             <label>
               <span>Name</span>
               <input value={newUserForm.name} onChange={(event) => setNewUserForm((current) => ({ ...current, name: event.target.value }))} />
+            </label>
+            <label>
+              <span>Username</span>
+              <input value={newUserForm.username} onChange={(event) => setNewUserForm((current) => ({ ...current, username: event.target.value }))} />
             </label>
             <label>
               <span>Title</span>
@@ -776,14 +771,9 @@ function AdminView({ data, currentUser, onCreateUser, onUpdateUser, onDeleteUser
                 ))}
               </select>
             </label>
-            <label className="full-span">
+            <label>
               <span>Password</span>
-              <input
-                type="text"
-                placeholder="Set a unique password"
-                value={newUserForm.password}
-                onChange={(event) => setNewUserForm((current) => ({ ...current, password: event.target.value }))}
-              />
+              <input type="text" placeholder="Set a unique password" value={newUserForm.password} onChange={(event) => setNewUserForm((current) => ({ ...current, password: event.target.value }))} />
             </label>
           </div>
 
@@ -811,7 +801,7 @@ function AdminView({ data, currentUser, onCreateUser, onUpdateUser, onDeleteUser
                       <div>
                         <strong>{user.name}</strong>
                         <small>
-                          {user.title || "No title"} - {user.department}
+                          @{user.username || "user"} - {user.title || "No title"} - {user.department}
                         </small>
                       </div>
                     </div>
@@ -826,6 +816,10 @@ function AdminView({ data, currentUser, onCreateUser, onUpdateUser, onDeleteUser
                     <label>
                       <span>Name</span>
                       <input value={draft.name || ""} onChange={(event) => setDraft(user.id, { name: event.target.value })} />
+                    </label>
+                    <label>
+                      <span>Username</span>
+                      <input value={draft.username || ""} onChange={(event) => setDraft(user.id, { username: event.target.value })} />
                     </label>
                     <label>
                       <span>Title</span>
@@ -858,7 +852,7 @@ function AdminView({ data, currentUser, onCreateUser, onUpdateUser, onDeleteUser
                         <option value="inactive">Inactive</option>
                       </select>
                     </label>
-                    <label>
+                    <label className="full-span">
                       <span>New password</span>
                       <input
                         type="text"
@@ -911,7 +905,7 @@ export default function App() {
   const [selectedBoardId, setSelectedBoardId] = useState(null);
   const [page, setPage] = useState("dashboard");
   const [loginPassword, setLoginPassword] = useState("");
-  const [loginUserId, setLoginUserId] = useState("");
+  const [loginUsername, setLoginUsername] = useState("");
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [projectForm, setProjectForm] = useState(blankProject(null));
 
@@ -923,7 +917,6 @@ export default function App() {
       try {
         const next = await getBootstrap();
         setData(next);
-        setLoginUserId((current) => current || next.users.find((user) => user.active !== false)?.id || "");
         setLoading(false);
         return;
       } catch (loadError) {
@@ -1000,12 +993,13 @@ export default function App() {
     setBusy("login");
     setError("");
     try {
-      const response = await login({ user_id: Number(loginUserId), password: loginPassword });
+      const response = await login({ username: loginUsername.trim(), password: loginPassword });
       const nextSession = { user_id: response.user.id };
       saveSession(nextSession);
       setSession(nextSession);
       setPage("dashboard");
       setLoginPassword("");
+      setLoginUsername("");
     } catch (submitError) {
       setError(submitError.message || "Unable to log in");
     } finally {
@@ -1018,6 +1012,7 @@ export default function App() {
     setSession(null);
     setPage("dashboard");
     setLoginPassword("");
+    setLoginUsername("");
   }
 
   function toggleTheme() {
@@ -1235,9 +1230,8 @@ export default function App() {
   if (!session || !currentUser) {
     return (
       <LoginScreen
-        users={data.users}
-        selectedUserId={loginUserId}
-        onSelectUser={setLoginUserId}
+        username={loginUsername}
+        onUsernameChange={setLoginUsername}
         password={loginPassword}
         onPasswordChange={setLoginPassword}
         onSubmit={handleLogin}
@@ -1254,8 +1248,8 @@ export default function App() {
     page === "dashboard"
       ? "Projects, priorities, due dates, and notes in one place."
       : page === "project"
-        ? "Edit the board directly, color the task groups, and let the status bar do the scanning for you."
-        : "Manage users, passwords, access, and preview mode.";
+        ? "Edit the board directly, color the task groups, and let the status bars do the scanning for you."
+        : "Manage users, usernames, passwords, access, and preview mode.";
 
   return (
     <div className="workspace-shell">
@@ -1272,7 +1266,9 @@ export default function App() {
           <span className="avatar">{currentUser.avatar || initials(currentUser.name)}</span>
           <div>
             <strong>{currentUser.name}</strong>
-            <small>{currentUser.title || currentUser.department}</small>
+            <small>
+              @{currentUser.username || "user"} - {currentUser.title || currentUser.department}
+            </small>
           </div>
         </div>
 
@@ -1327,10 +1323,7 @@ export default function App() {
             </label>
             <label>
               <span>Description</span>
-              <input
-                value={projectForm.description}
-                onChange={(event) => setProjectForm((current) => ({ ...current, description: event.target.value }))}
-              />
+              <input value={projectForm.description} onChange={(event) => setProjectForm((current) => ({ ...current, description: event.target.value }))} />
             </label>
             <label>
               <span>Department</span>
@@ -1380,7 +1373,7 @@ export default function App() {
           <section className="panel preview-banner">
             <div>
               <span className="eyebrow">Preview mode</span>
-              <h3>{currentUser.name}'s view</h3>
+              <h3>{currentUser.name}&apos;s view</h3>
             </div>
             <p>You are viewing the workspace as this user. Use Return to Admin when you want your admin tools back.</p>
           </section>
