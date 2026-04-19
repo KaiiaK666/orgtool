@@ -971,6 +971,82 @@ a {
   color: var(--muted) !important;
 }
 
+.project-hierarchy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+}
+
+.project-hierarchy__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.project-hierarchy__list {
+  display: grid;
+  gap: 8px;
+}
+
+.project-group-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+.project-group-row__name,
+.project-group-row__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-group-row__name {
+  min-width: 0;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.project-group-row__name i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex: none;
+  background: var(--group-dot, var(--project-accent, var(--accent)));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--group-dot, var(--project-accent, var(--accent))) 18%, transparent);
+}
+
+.project-group-row__meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.project-group-row--overdue {
+  border-color: rgba(209, 79, 63, 0.26);
+  background: linear-gradient(90deg, rgba(209, 79, 63, 0.1), rgba(209, 79, 63, 0.03));
+}
+
+.project-group-row--pending {
+  border-color: rgba(125, 139, 167, 0.22);
+  background: linear-gradient(90deg, rgba(125, 139, 167, 0.12), rgba(125, 139, 167, 0.04));
+}
+
+.project-group-row--done {
+  border-color: rgba(31, 138, 76, 0.24);
+  background: linear-gradient(90deg, rgba(31, 138, 76, 0.12), rgba(31, 138, 76, 0.04));
+}
+
+.project-group-row--empty {
+  justify-content: flex-start;
+}
+
 .project-card--overdue {
   background: var(--surface) !important;
   border-color: rgba(209, 79, 63, 0.32);

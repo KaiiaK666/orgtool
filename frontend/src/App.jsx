@@ -96,6 +96,29 @@ function boardTone(board) {
   return "Pending";
 }
 
+function boardGroupSummary(board) {
+  const tasks = board.tasks || [];
+  return (board.groups || []).map((group) => {
+    const groupTasks = tasks.filter((task) => Number(task.group_id) === Number(group.id));
+    const doneCount = groupTasks.filter((task) => task.status === "Done").length;
+    let status = "Pending";
+    if (groupTasks.some((task) => visualStatus(task) === "Overdue")) {
+      status = "Overdue";
+    } else if (groupTasks.length && doneCount === groupTasks.length) {
+      status = "Done";
+    }
+
+    return {
+      id: group.id,
+      name: group.name,
+      color: group.color || board.color || "#3156f5",
+      taskCount: groupTasks.length,
+      doneCount,
+      status,
+    };
+  });
+}
+
 function relevantBoards(boards, user) {
   if (!user) return boards;
   if (user.role === "Admin") return boards;
@@ -405,6 +428,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
           {boards.map((board) => {
             const progress = boardProgress(board);
             const toneName = tone(boardTone(board));
+            const groups = boardGroupSummary(board);
             return (
               <button
                 key={board.id}
@@ -419,9 +443,31 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
                 </div>
                 <strong>{board.name}</strong>
                 <p>{board.description || "No description yet."}</p>
+                <div className="project-hierarchy">
+                  <div className="project-hierarchy__head">
+                    <small>{groups.length} task groups</small>
+                  </div>
+                  <div className="project-hierarchy__list">
+                    {groups.length ? (
+                      groups.map((group) => (
+                        <div key={group.id} className={cls("project-group-row", `project-group-row--${tone(group.status)}`)}>
+                          <span className="project-group-row__name">
+                            <i style={{ "--group-dot": group.color }} />
+                            {group.name}
+                          </span>
+                          <span className="project-group-row__meta">{group.taskCount} tasks</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="project-group-row project-group-row--empty">
+                        <span className="project-group-row__name">No task groups yet</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <div className="progress-row">
                   <small>
-                    {progress.done}/{progress.total} done
+                    {groups.length} groups
                   </small>
                   <small>{progress.percent}%</small>
                 </div>
