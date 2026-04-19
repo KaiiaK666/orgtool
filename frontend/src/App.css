@@ -154,8 +154,8 @@ a {
 }
 
 .login-card--simple {
-  width: min(920px, 100%);
-  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.8fr);
+  width: min(960px, 100%);
+  grid-template-columns: minmax(0, 1.08fr) minmax(320px, 380px);
 }
 
 .login-hero,
@@ -189,6 +189,7 @@ a {
   border-radius: 28px;
   background: var(--surface-muted);
   border: 1px solid var(--line);
+  align-self: start;
 }
 
 .login-panel__head,
@@ -219,6 +220,11 @@ a {
 
 .brand-lockup--login {
   align-items: flex-start;
+}
+
+.brand-lockup--login .brand-copy {
+  min-width: 0;
+  max-width: 420px;
 }
 
 .brand-copy,
@@ -277,7 +283,7 @@ a {
 
 .login-card h1 {
   font-size: clamp(2.35rem, 4vw, 4rem);
-  max-width: 10ch;
+  max-width: 7ch;
 }
 
 .login-panel__head h2 {
@@ -301,6 +307,7 @@ a {
   border-radius: 22px;
   background: var(--surface-muted);
   border: 1px solid var(--line);
+  max-width: 40rem;
 }
 
 .login-note strong {
@@ -1134,6 +1141,10 @@ a {
   .project-grid,
   .inline-form {
     grid-template-columns: 1fr;
+  }
+
+  .login-card--simple {
+    width: min(760px, 100%);
   }
 
   .board-hero,
