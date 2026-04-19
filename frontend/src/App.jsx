@@ -16,6 +16,7 @@ import {
 
 const SESSION_KEY = "orgtool-session";
 const THEME_KEY = "orgtool-theme";
+const COLUMN_WIDTHS_KEY_PREFIX = "orgtool-column-widths";
 const LOGO_SRC = "/organization-tool-mark.png";
 const STATUS_OPTIONS = ["Overdue", "Pending", "Done"];
 const PRIORITY_OPTIONS = ["Critical", "High", "Medium", "Low"];
@@ -129,6 +130,38 @@ function loadTheme() {
 
 function saveTheme(theme) {
   localStorage.setItem(THEME_KEY, theme);
+}
+
+function defaultColumnWidths(board) {
+  const widths = {
+    task: 560,
+    priority: 180,
+    status: 180,
+    due_date: 170,
+    owner: 230,
+    notes: 340,
+  };
+
+  for (const field of board?.fields || []) {
+    widths[`field:${field.id}`] =
+      field.type === "date" ? 170 : field.type === "number" ? 130 : field.type === "tag" ? 170 : 220;
+  }
+
+  return widths;
+}
+
+function loadColumnWidths(board) {
+  if (!board?.id) return defaultColumnWidths(board || { fields: [] });
+  try {
+    const saved = JSON.parse(localStorage.getItem(`${COLUMN_WIDTHS_KEY_PREFIX}-${board.id}`) || "{}");
+    return { ...defaultColumnWidths(board), ...saved };
+  } catch {
+    return defaultColumnWidths(board);
+  }
+}
+
+function persistColumnWidths(boardId, widths) {
+  localStorage.setItem(`${COLUMN_WIDTHS_KEY_PREFIX}-${boardId}`, JSON.stringify(widths));
 }
 
 function blankProject(user) {
@@ -446,6 +479,7 @@ function ProjectBoard({
   const [groupDraft, setGroupDraft] = useState({ name: "", color: "#3156f5" });
   const [showColumnForm, setShowColumnForm] = useState(false);
   const [columnDraft, setColumnDraft] = useState({ name: "", type: "text" });
+  const [columnWidths, setColumnWidths] = useState(() => loadColumnWidths(board));
 
   useEffect(() => {
     setSearch("");
@@ -454,7 +488,13 @@ function ProjectBoard({
     setGroupDraft({ name: "", color: board?.color || "#3156f5" });
     setShowColumnForm(false);
     setColumnDraft({ name: "", type: "text" });
-  }, [board?.id, board?.color]);
+    setColumnWidths(loadColumnWidths(board));
+  }, [board?.id, board?.color, board?.fields?.length]);
+
+  useEffect(() => {
+    if (!board?.id) return;
+    persistColumnWidths(board.id, columnWidths);
+  }, [board?.id, columnWidths]);
 
   if (!board) {
     return (
@@ -501,6 +541,36 @@ function ProjectBoard({
     if (!name) return;
     onCreateGroup(name, groupDraft.color);
     setGroupDraft((current) => ({ ...current, name: "" }));
+  }
+
+  function startColumnResize(columnKey, minimumWidth, event) {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = columnWidths[columnKey] || minimumWidth;
+
+    function handleMove(moveEvent) {
+      const delta = moveEvent.clientX - startX;
+      setColumnWidths((current) => ({
+        ...current,
+        [columnKey]: Math.max(minimumWidth, startWidth + delta),
+      }));
+    }
+
+    function handleUp() {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    }
+
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+  }
+
+  function columnKeyForField(field) {
+    return `field:${field.id}`;
   }
 
   return (
@@ -578,26 +648,72 @@ function ProjectBoard({
               <div className="board-table-wrap">
                 <table className="board-table">
                   <colgroup>
-                    <col className="col-task" />
-                    <col className="col-priority" />
-                    <col className="col-status" />
-                    <col className="col-date" />
-                    <col className="col-owner" />
-                    <col className="col-notes" />
+                    <col className="col-task" style={{ width: `${columnWidths.task}px` }} />
+                    <col className="col-priority" style={{ width: `${columnWidths.priority}px` }} />
+                    <col className="col-status" style={{ width: `${columnWidths.status}px` }} />
+                    <col className="col-date" style={{ width: `${columnWidths.due_date}px` }} />
+                    <col className="col-owner" style={{ width: `${columnWidths.owner}px` }} />
+                    <col className="col-notes" style={{ width: `${columnWidths.notes}px` }} />
                     {board.fields.map((field) => (
-                      <col key={`column-width-${field.id}`} className={cls("col-custom", `col-custom--${field.type}`)} />
+                      <col
+                        key={`column-width-${field.id}`}
+                        className={cls("col-custom", `col-custom--${field.type}`)}
+                        style={{ width: `${columnWidths[columnKeyForField(field)]}px` }}
+                      />
                     ))}
                   </colgroup>
                   <thead>
                     <tr>
-                      <th>Task</th>
-                      <th>Priority</th>
-                      <th>Status</th>
-                      <th>Due</th>
-                      <th>Owner</th>
-                      <th>Notes</th>
+                      <th>
+                        <div className="th-inner">
+                          <span>Task</span>
+                          <button type="button" className="col-resizer" aria-label="Resize task column" onMouseDown={(event) => startColumnResize("task", 320, event)} />
+                        </div>
+                      </th>
+                      <th>
+                        <div className="th-inner">
+                          <span>Priority</span>
+                          <button type="button" className="col-resizer" aria-label="Resize priority column" onMouseDown={(event) => startColumnResize("priority", 140, event)} />
+                        </div>
+                      </th>
+                      <th>
+                        <div className="th-inner">
+                          <span>Status</span>
+                          <button type="button" className="col-resizer" aria-label="Resize status column" onMouseDown={(event) => startColumnResize("status", 140, event)} />
+                        </div>
+                      </th>
+                      <th>
+                        <div className="th-inner">
+                          <span>Due</span>
+                          <button type="button" className="col-resizer" aria-label="Resize due date column" onMouseDown={(event) => startColumnResize("due_date", 150, event)} />
+                        </div>
+                      </th>
+                      <th>
+                        <div className="th-inner">
+                          <span>Owner</span>
+                          <button type="button" className="col-resizer" aria-label="Resize owner column" onMouseDown={(event) => startColumnResize("owner", 170, event)} />
+                        </div>
+                      </th>
+                      <th>
+                        <div className="th-inner">
+                          <span>Notes</span>
+                          <button type="button" className="col-resizer" aria-label="Resize notes column" onMouseDown={(event) => startColumnResize("notes", 220, event)} />
+                        </div>
+                      </th>
                       {board.fields.map((field) => (
-                        <th key={`column-head-${field.id}`}>{field.name}</th>
+                        <th key={`column-head-${field.id}`}>
+                          <div className="th-inner">
+                            <span>{field.name}</span>
+                            <button
+                              type="button"
+                              className="col-resizer"
+                              aria-label={`Resize ${field.name} column`}
+                              onMouseDown={(event) =>
+                                startColumnResize(columnKeyForField(field), field.type === "number" ? 120 : field.type === "date" ? 150 : 160, event)
+                              }
+                            />
+                          </div>
+                        </th>
                       ))}
                     </tr>
                   </thead>

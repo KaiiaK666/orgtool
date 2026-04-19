@@ -154,8 +154,9 @@ a {
 }
 
 .login-card--simple {
-  width: min(960px, 100%);
-  grid-template-columns: minmax(0, 1.08fr) minmax(320px, 380px);
+  width: min(760px, 100%);
+  grid-template-columns: 1fr;
+  gap: 20px;
 }
 
 .login-hero,
@@ -190,6 +191,8 @@ a {
   background: var(--surface-muted);
   border: 1px solid var(--line);
   align-self: start;
+  max-width: 420px;
+  width: 100%;
 }
 
 .login-panel__head,
@@ -224,7 +227,7 @@ a {
 
 .brand-lockup--login .brand-copy {
   min-width: 0;
-  max-width: 420px;
+  max-width: 520px;
 }
 
 .brand-copy,
@@ -282,8 +285,8 @@ a {
 }
 
 .login-card h1 {
-  font-size: clamp(2.35rem, 4vw, 4rem);
-  max-width: 7ch;
+  font-size: clamp(2.2rem, 3.6vw, 3.55rem);
+  max-width: 8ch;
 }
 
 .login-panel__head h2 {
@@ -610,6 +613,7 @@ a {
   overflow: hidden;
   background: var(--surface);
   color: var(--text);
+  border-width: 1px;
 }
 
 .project-card::before {
@@ -630,18 +634,21 @@ a {
 }
 
 .project-card--overdue {
-  background: linear-gradient(180deg, var(--surface), rgba(209, 79, 63, 0.08));
-  border-color: rgba(209, 79, 63, 0.34);
+  background: var(--surface) !important;
+  border-color: rgba(209, 79, 63, 0.32);
+  box-shadow: 0 18px 42px rgba(209, 79, 63, 0.08);
 }
 
 .project-card--pending {
-  background: linear-gradient(180deg, var(--surface), rgba(125, 139, 167, 0.12));
-  border-color: rgba(125, 139, 167, 0.34);
+  background: var(--surface) !important;
+  border-color: rgba(125, 139, 167, 0.28);
+  box-shadow: 0 18px 42px rgba(125, 139, 167, 0.08);
 }
 
 .project-card--done {
-  background: linear-gradient(180deg, var(--surface), rgba(31, 138, 76, 0.09));
-  border-color: rgba(31, 138, 76, 0.34);
+  background: var(--surface) !important;
+  border-color: rgba(31, 138, 76, 0.3);
+  box-shadow: 0 18px 42px rgba(31, 138, 76, 0.08);
 }
 
 .project-chip,
@@ -902,9 +909,9 @@ a {
 
 .board-table {
   width: 100%;
-  min-width: 820px;
+  min-width: 920px;
   border-collapse: separate;
-  border-spacing: 0 10px;
+  border-spacing: 0 8px;
 }
 
 .col-task {
@@ -920,7 +927,7 @@ a {
 }
 
 .col-date {
-  width: 8rem;
+  width: 10.5rem;
 }
 
 .col-owner {
@@ -953,6 +960,43 @@ a {
   color: var(--muted);
 }
 
+.th-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.th-inner span {
+  min-width: 0;
+}
+
+.col-resizer {
+  width: 12px;
+  min-width: 12px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  position: relative;
+  cursor: col-resize;
+}
+
+.col-resizer::before {
+  content: "";
+  position: absolute;
+  inset: 2px 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+.col-resizer:hover::before {
+  background: var(--accent);
+}
+
 .board-table td {
   padding: 10px 8px;
   vertical-align: middle;
@@ -963,7 +1007,7 @@ a {
   background: var(--surface-muted);
   border-top: 1px solid transparent;
   border-bottom: 1px solid transparent;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 .task-row td:first-child {
@@ -976,7 +1020,7 @@ a {
 }
 
 .task-row--overdue td {
-  background: linear-gradient(90deg, rgba(209, 79, 63, 0.26), rgba(209, 79, 63, 0.12));
+  background: linear-gradient(90deg, rgba(209, 79, 63, 0.34), rgba(209, 79, 63, 0.18));
   border-top-color: rgba(209, 79, 63, 0.28);
   border-bottom-color: rgba(209, 79, 63, 0.28);
 }
@@ -986,7 +1030,7 @@ a {
 }
 
 .task-row--pending td {
-  background: linear-gradient(90deg, rgba(125, 139, 167, 0.22), rgba(125, 139, 167, 0.1));
+  background: linear-gradient(90deg, rgba(125, 139, 167, 0.3), rgba(125, 139, 167, 0.16));
   border-top-color: rgba(125, 139, 167, 0.24);
   border-bottom-color: rgba(125, 139, 167, 0.24);
 }
@@ -996,7 +1040,7 @@ a {
 }
 
 .task-row--done td {
-  background: linear-gradient(90deg, rgba(31, 138, 76, 0.24), rgba(31, 138, 76, 0.1));
+  background: linear-gradient(90deg, rgba(31, 138, 76, 0.3), rgba(31, 138, 76, 0.14));
   border-top-color: rgba(31, 138, 76, 0.26);
   border-bottom-color: rgba(31, 138, 76, 0.26);
 }
@@ -1030,7 +1074,9 @@ a {
 }
 
 .cell-input--date {
-  max-width: 8rem;
+  min-width: 9.5rem;
+  max-width: 10.5rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .cell-input--tagged {
@@ -1161,7 +1207,7 @@ a {
   }
 
   .login-card--simple {
-    width: min(760px, 100%);
+    width: min(720px, 100%);
   }
 
   .board-hero,
@@ -1190,6 +1236,7 @@ a {
 
   .login-panel {
     padding: 18px;
+    max-width: none;
   }
 
   .login-user-grid,
@@ -1216,7 +1263,7 @@ a {
 
   .login-card h1 {
     font-size: 2.3rem;
-    max-width: none;
+    max-width: 9ch;
   }
 
   .board-table {
