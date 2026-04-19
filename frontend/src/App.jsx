@@ -256,81 +256,25 @@ function TutorialOverlay({ onClose }) {
 function LoginScreen({ username, onUsernameChange, password, onPasswordChange, onSubmit, error, busy, theme, onToggleTheme, onOpenTutorial }) {
   return (
     <div className="login-screen">
-      <div className="login-card login-card--simple">
-        <div className="login-card__topbar">
-          <span className="eyebrow">Welcome</span>
+      <div className="login-shell">
+        <div className="login-shell__topbar">
+          <div className="login-shell__brand">
+            <img className="brand-mark" src={LOGO_SRC} alt="Organization Tool logo" />
+            <div>
+              <span className="eyebrow">Organization Tool</span>
+              <strong>Workspace sign in</strong>
+            </div>
+          </div>
           <ThemeToggle theme={theme} onToggle={onToggleTheme} compact />
         </div>
 
-        <div className="login-stage">
-          <section className="login-hero login-hero--tight">
-            <div className="brand-lockup brand-lockup--login">
-              <img className="brand-mark brand-mark--large" src={LOGO_SRC} alt="Organization Tool logo" />
-              <div className="brand-copy login-copy">
-                <span className="eyebrow">Organization Tool</span>
-                <div className="login-title-stack">
-                  <h1>Dealership</h1>
-                  <div className="login-title-cycle" aria-label="Animated title">
-                    <span>organization</span>
-                    <span>execution</span>
-                    <span>visibility</span>
-                    <span>workflow</span>
-                  </div>
-                  <h1>tool</h1>
-                </div>
-                <p>Simple projects, clean task groups, faster status scanning, and a login flow that stays out of the way.</p>
-                <div className="login-feature-row" aria-hidden="true">
-                  <span>Boards</span>
-                  <span>Owners</span>
-                  <span>Status</span>
-                  <span>Admin</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="login-note">
-              <strong>Sign in with your username</strong>
-              <p>Use the username assigned in Admin, enter your password, and go straight into your workspace.</p>
-            </div>
-          </section>
-
-          <aside className="login-aside" aria-hidden="true">
-            <div className="login-visual">
-              <div className="login-visual__badge">Live workspace</div>
-              <div className="login-visual__grid">
-                <div className="login-visual__line login-visual__line--primary" />
-                <div className="login-visual__line login-visual__line--secondary" />
-                <div className="login-visual__line login-visual__line--accent" />
-                <div className="login-visual__orb login-visual__orb--one" />
-                <div className="login-visual__orb login-visual__orb--two" />
-              </div>
-              <div className="login-visual__stats">
-                <article>
-                  <span>Scan speed</span>
-                  <strong>Fast</strong>
-                </article>
-                <article>
-                  <span>Project flow</span>
-                  <strong>Clean</strong>
-                </article>
-                <article>
-                  <span>Access</span>
-                  <strong>Role-based</strong>
-                </article>
-              </div>
-            </div>
-          </aside>
-        </div>
-
-        <section className="login-panel">
-          <div className="login-panel__head">
+        <section className="login-shell__card">
+          <div className="login-shell__intro">
             <div>
               <span className="eyebrow">Sign in</span>
-              <h2>Workspace login</h2>
+              <h1>Dealership organizational tool</h1>
             </div>
-            <button type="button" className="ghost-button" onClick={onOpenTutorial}>
-              Open tutorial
-            </button>
+            <p>Use your username and password to open your workspace.</p>
           </div>
 
           <form className="login-form" onSubmit={onSubmit}>
@@ -347,6 +291,12 @@ function LoginScreen({ username, onUsernameChange, password, onPasswordChange, o
               {busy ? "Entering..." : "Enter Workspace"}
             </button>
           </form>
+
+          <div className="login-shell__footer">
+            <button type="button" className="ghost-button" onClick={onOpenTutorial}>
+              Tutorial
+            </button>
+          </div>
         </section>
       </div>
     </div>

@@ -118,11 +118,75 @@ a {
 .login-screen {
   display: grid;
   gap: 18px;
+  place-items: center;
   align-content: center;
 }
 
 .login-screen__actions {
   display: flex;
+  justify-content: flex-end;
+}
+
+.login-shell {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 16px;
+}
+
+.login-shell__topbar,
+.login-shell__brand,
+.login-shell__footer {
+  display: flex;
+  align-items: center;
+}
+
+.login-shell__topbar {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.login-shell__brand {
+  gap: 14px;
+}
+
+.login-shell__brand strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.login-shell__card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  border-radius: 30px;
+  padding: 28px;
+  display: grid;
+  gap: 20px;
+}
+
+.login-shell__intro {
+  display: grid;
+  gap: 10px;
+}
+
+.login-shell__intro h1 {
+  margin: 0;
+  max-width: 11ch;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(2rem, 5vw, 2.7rem);
+  line-height: 0.96;
+}
+
+.login-shell__intro p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.login-shell__footer {
   justify-content: flex-end;
 }
 
@@ -646,6 +710,10 @@ a {
 .logout-button {
   width: 100%;
   justify-content: center;
+}
+
+.login-shell__card .login-form button {
+  width: 100%;
 }
 
 .theme-toggle {
@@ -1614,6 +1682,19 @@ a {
   .loading-screen,
   .login-screen {
     padding: 16px;
+  }
+
+  .login-shell__topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .login-shell__footer {
+    justify-content: stretch;
+  }
+
+  .login-shell__footer .ghost-button {
+    width: 100%;
   }
 
   .login-card h1 {
