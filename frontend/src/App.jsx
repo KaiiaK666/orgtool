@@ -196,14 +196,72 @@ function ThemeToggle({ theme, onToggle, compact = false }) {
   );
 }
 
-function LoginScreen({ username, onUsernameChange, password, onPasswordChange, onSubmit, error, busy, theme, onToggleTheme }) {
+function TutorialOverlay({ onClose }) {
+  return (
+    <div className="tutorial-overlay" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">
+      <div className="tutorial-backdrop" onClick={onClose} />
+      <section className="tutorial-sheet">
+        <div className="tutorial-sheet__head">
+          <div>
+            <span className="eyebrow">Tutorial</span>
+            <h2 id="tutorial-title">How Organization Tool works</h2>
+          </div>
+          <button type="button" className="ghost-button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        <div className="tutorial-grid">
+          <article className="tutorial-card">
+            <span className="tutorial-step">1</span>
+            <h3>Log in</h3>
+            <p>Use the username and password created in Admin. Each person lands in their own workspace view.</p>
+          </article>
+
+          <article className="tutorial-card">
+            <span className="tutorial-step">2</span>
+            <h3>Open a project</h3>
+            <p>From Dashboard or the left sidebar, open a board to work inside its task groups.</p>
+          </article>
+
+          <article className="tutorial-card">
+            <span className="tutorial-step">3</span>
+            <h3>Read status quickly</h3>
+            <p>Rows use fixed status colors: red for overdue, gray for pending, and green for done. You should be able to scan the board without reading every word.</p>
+          </article>
+
+          <article className="tutorial-card">
+            <span className="tutorial-step">4</span>
+            <h3>Resize columns</h3>
+            <p>Drag the small handle on any column header to make it wider or narrower. Your sizes stay saved on that board.</p>
+          </article>
+
+          <article className="tutorial-card">
+            <span className="tutorial-step">5</span>
+            <h3>Customize structure</h3>
+            <p>Use board color for the project accent, task-group color for each section rail, and add extra columns only when they help.</p>
+          </article>
+
+          <article className="tutorial-card">
+            <span className="tutorial-step">6</span>
+            <h3>Manage users</h3>
+            <p>Admin can create users, change usernames and passwords, turn access on or off, and preview exactly what any user sees.</p>
+          </article>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function LoginScreen({ username, onUsernameChange, password, onPasswordChange, onSubmit, error, busy, theme, onToggleTheme, onOpenTutorial }) {
   return (
     <div className="login-screen">
-      <div className="login-screen__actions">
-        <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-      </div>
-
       <div className="login-card login-card--simple">
+        <div className="login-card__topbar">
+          <span className="eyebrow">Welcome</span>
+          <ThemeToggle theme={theme} onToggle={onToggleTheme} compact />
+        </div>
+
         <section className="login-hero">
           <div className="brand-lockup brand-lockup--login">
             <img className="brand-mark brand-mark--large" src={LOGO_SRC} alt="Organization Tool logo" />
@@ -242,6 +300,10 @@ function LoginScreen({ username, onUsernameChange, password, onPasswordChange, o
               {busy ? "Entering..." : "Enter Workspace"}
             </button>
           </form>
+
+          <button type="button" className="ghost-button ghost-button--wide" onClick={onOpenTutorial}>
+            Open tutorial
+          </button>
         </section>
       </div>
     </div>
@@ -1024,6 +1086,7 @@ export default function App() {
   const [loginUsername, setLoginUsername] = useState("");
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [projectForm, setProjectForm] = useState(blankProject(null));
+  const [showTutorial, setShowTutorial] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -1345,17 +1408,21 @@ export default function App() {
 
   if (!session || !currentUser) {
     return (
-      <LoginScreen
-        username={loginUsername}
-        onUsernameChange={setLoginUsername}
-        password={loginPassword}
-        onPasswordChange={setLoginPassword}
-        onSubmit={handleLogin}
-        error={error}
-        busy={busy === "login"}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-      />
+      <>
+        <LoginScreen
+          username={loginUsername}
+          onUsernameChange={setLoginUsername}
+          password={loginPassword}
+          onPasswordChange={setLoginPassword}
+          onSubmit={handleLogin}
+          error={error}
+          busy={busy === "login"}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onOpenTutorial={() => setShowTutorial(true)}
+        />
+        {showTutorial ? <TutorialOverlay onClose={() => setShowTutorial(false)} /> : null}
+      </>
     );
   }
 
@@ -1461,9 +1528,14 @@ export default function App() {
           </form>
         ) : null}
 
-        <button type="button" className="logout-button" onClick={handleLogout}>
-          Log Out
-        </button>
+        <div className="sidebar-footer">
+          <button type="button" className="ghost-button ghost-button--wide" onClick={() => setShowTutorial(true)}>
+            Tutorial
+          </button>
+          <button type="button" className="logout-button" onClick={handleLogout}>
+            Log Out
+          </button>
+        </div>
       </aside>
 
       <main className="main-panel">
@@ -1534,6 +1606,8 @@ export default function App() {
             busy={busy}
           />
         ) : null}
+
+        {showTutorial ? <TutorialOverlay onClose={() => setShowTutorial(false)} /> : null}
       </main>
     </div>
   );
