@@ -1,5 +1,7 @@
 backend/__pycache__/
+backend/*.log
 backend/server.log
 frontend/node_modules/
 frontend/dist/
+frontend/*.log
 frontend/vite.log
