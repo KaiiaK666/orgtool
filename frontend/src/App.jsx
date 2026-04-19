@@ -581,6 +581,15 @@ function ProjectBoard({
   const [showColumnForm, setShowColumnForm] = useState(false);
   const [columnDraft, setColumnDraft] = useState({ name: "", type: "text" });
   const [columnWidths, setColumnWidths] = useState(() => loadColumnWidths(board));
+  const [showBoardEditor, setShowBoardEditor] = useState(false);
+  const [boardDraft, setBoardDraft] = useState(() => ({
+    name: board?.name || "",
+    description: board?.description || "",
+    department: board?.department || "General",
+    color: board?.color || "#3156f5",
+  }));
+  const [editingGroupId, setEditingGroupId] = useState(null);
+  const [groupEditDrafts, setGroupEditDrafts] = useState({});
 
   useEffect(() => {
     setSearch("");
@@ -590,6 +599,15 @@ function ProjectBoard({
     setShowColumnForm(false);
     setColumnDraft({ name: "", type: "text" });
     setColumnWidths(loadColumnWidths(board));
+    setShowBoardEditor(false);
+    setBoardDraft({
+      name: board?.name || "",
+      description: board?.description || "",
+      department: board?.department || "General",
+      color: board?.color || "#3156f5",
+    });
+    setEditingGroupId(null);
+    setGroupEditDrafts({});
   }, [board?.id, board?.color, board?.fields?.length]);
 
   useEffect(() => {
@@ -644,6 +662,43 @@ function ProjectBoard({
     setGroupDraft((current) => ({ ...current, name: "" }));
   }
 
+  function submitBoardDetails(event) {
+    event.preventDefault();
+    const name = boardDraft.name.trim();
+    if (!name) return;
+    onUpdateBoard({
+      name,
+      description: boardDraft.description.trim(),
+      department: boardDraft.department,
+      color: boardDraft.color,
+    });
+    setShowBoardEditor(false);
+  }
+
+  function openGroupEditor(group) {
+    setEditingGroupId(group.id);
+    setGroupEditDrafts((current) => ({
+      ...current,
+      [group.id]: {
+        name: group.name || "",
+        color: group.color || board.color || "#3156f5",
+      },
+    }));
+  }
+
+  function submitGroupDetails(event, group) {
+    event.preventDefault();
+    const draft = groupEditDrafts[group.id];
+    if (!draft) return;
+    const name = draft.name.trim();
+    if (!name) return;
+    onUpdateGroup(group.id, {
+      name,
+      color: draft.color,
+    });
+    setEditingGroupId(null);
+  }
+
   function startColumnResize(columnKey, minimumWidth, event) {
     event.preventDefault();
     const startX = event.clientX;
@@ -677,7 +732,7 @@ function ProjectBoard({
   return (
     <div className="project-board">
       <section className={cls("board-hero", `board-hero--${tone(boardTone(board))}`)}>
-        <div>
+        <div className="board-hero__summary">
           <span className="eyebrow">{board.department}</span>
           <h2>{board.name}</h2>
           <p>{board.description || "Simple board for task groups, due dates, notes, and priority."}</p>
@@ -690,16 +745,52 @@ function ProjectBoard({
             {mineOnly ? "Only mine" : "All tasks"}
           </button>
 
-          <label className="color-control">
-            <span>Board color</span>
-            <input type="color" value={board.color || "#3156f5"} onChange={(event) => onUpdateBoard({ color: event.target.value })} />
-          </label>
+          <button type="button" className={cls("ghost-button", showBoardEditor && "ghost-button--active")} onClick={() => setShowBoardEditor((current) => !current)}>
+            {showBoardEditor ? "Close project" : "Edit project"}
+          </button>
 
           <button type="button" className="plus-button" onClick={() => setShowColumnForm((current) => !current)}>
             {showColumnForm ? "Close columns" : "+ Add Column"}
           </button>
         </div>
       </section>
+
+      {showBoardEditor ? (
+        <form className="panel board-editor" onSubmit={submitBoardDetails}>
+          <label>
+            <span>Project name</span>
+            <input value={boardDraft.name} onChange={(event) => setBoardDraft((current) => ({ ...current, name: event.target.value }))} />
+          </label>
+          <label>
+            <span>Description</span>
+            <input
+              value={boardDraft.description}
+              placeholder="What this project is for"
+              onChange={(event) => setBoardDraft((current) => ({ ...current, description: event.target.value }))}
+            />
+          </label>
+          <label>
+            <span>Department</span>
+            <select value={boardDraft.department} onChange={(event) => setBoardDraft((current) => ({ ...current, department: event.target.value }))}>
+              {DEPARTMENT_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="color-control color-control--create">
+            <span>Project color</span>
+            <input type="color" value={boardDraft.color} onChange={(event) => setBoardDraft((current) => ({ ...current, color: event.target.value }))} />
+          </label>
+          <div className="board-editor__actions">
+            <button type="button" className="ghost-button" onClick={() => setShowBoardEditor(false)}>
+              Cancel
+            </button>
+            <button type="submit">Save project</button>
+          </div>
+        </form>
+      ) : null}
 
       {showColumnForm ? (
         <form className="panel inline-form" onSubmit={submitColumn}>
@@ -724,27 +815,61 @@ function ProjectBoard({
       <div className="group-stack">
         {board.groups.map((group) => {
           const tasks = visibleTasksForGroup(group.id);
+          const groupDraftValue = groupEditDrafts[group.id] || {
+            name: group.name || "",
+            color: group.color || board.color || "#3156f5",
+          };
           return (
             <section key={group.id} className="group-card" style={{ "--group-accent": group.color || board.color || "#3156f5" }}>
               <div className="group-card__head">
                 <div className="group-card__meta">
-                  <input
-                    className="group-name-input"
-                    defaultValue={group.name}
-                    aria-label="Task group name"
-                    onBlur={(event) => {
-                      const nextName = event.target.value.trim();
-                      if (nextName && nextName !== group.name) onUpdateGroup(group.id, { name: nextName });
-                    }}
-                  />
+                  <h3>{group.name}</h3>
                   <small>{tasks.length} tasks</small>
                 </div>
 
-                <label className="color-control color-control--inline">
-                  <span>Task group color</span>
-                  <input type="color" value={group.color || board.color || "#3156f5"} onChange={(event) => onUpdateGroup(group.id, { color: event.target.value })} />
-                </label>
+                <div className="group-card__actions">
+                  <div className="group-card__swatch" style={{ "--group-swatch": group.color || board.color || "#3156f5" }} />
+                  <button type="button" className={cls("ghost-button", editingGroupId === group.id && "ghost-button--active")} onClick={() => openGroupEditor(group)}>
+                    {editingGroupId === group.id ? "Editing group" : "Edit group"}
+                  </button>
+                </div>
               </div>
+
+              {editingGroupId === group.id ? (
+                <form className="panel group-editor" onSubmit={(event) => submitGroupDetails(event, group)}>
+                  <label>
+                    <span>Task group name</span>
+                    <input
+                      value={groupDraftValue.name}
+                      onChange={(event) =>
+                        setGroupEditDrafts((current) => ({
+                          ...current,
+                          [group.id]: { ...groupDraftValue, name: event.target.value },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="color-control color-control--create">
+                    <span>Task group color</span>
+                    <input
+                      type="color"
+                      value={groupDraftValue.color}
+                      onChange={(event) =>
+                        setGroupEditDrafts((current) => ({
+                          ...current,
+                          [group.id]: { ...groupDraftValue, color: event.target.value },
+                        }))
+                      }
+                    />
+                  </label>
+                  <div className="group-editor__actions">
+                    <button type="button" className="ghost-button" onClick={() => setEditingGroupId(null)}>
+                      Cancel
+                    </button>
+                    <button type="submit">Save group</button>
+                  </div>
+                </form>
+              ) : null}
 
               <div className="board-table-wrap">
                 <table className="board-table">

@@ -1297,12 +1297,23 @@ a {
   justify-content: flex-end;
 }
 
+.board-hero__summary {
+  display: grid;
+  gap: 8px;
+}
+
 .search {
   min-width: 260px;
 }
 
 .toggle-chip.is-active {
   background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.ghost-button--active {
+  background: var(--accent-soft);
+  border-color: rgba(49, 86, 245, 0.3);
   color: var(--accent-deep);
 }
 
@@ -1347,6 +1358,29 @@ a {
   grid-template-columns: minmax(220px, 1fr) 132px auto;
 }
 
+.board-editor {
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.2fr) 180px auto;
+  align-items: end;
+}
+
+.group-editor {
+  grid-template-columns: minmax(220px, 1fr) 160px auto;
+  align-items: end;
+}
+
+.board-editor__actions,
+.group-editor__actions,
+.group-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.board-editor__actions,
+.group-editor__actions {
+  justify-content: flex-end;
+}
+
 .group-card {
   position: relative;
   overflow: hidden;
@@ -1373,8 +1407,20 @@ a {
   gap: 6px;
 }
 
+.group-card__meta h3 {
+  margin: 0;
+}
+
 .group-card__meta small {
   color: var(--muted);
+}
+
+.group-card__swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--group-swatch, var(--group-accent, var(--accent)));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--group-swatch, var(--group-accent, var(--accent))) 18%, transparent);
 }
 
 .group-name-input {
@@ -1702,9 +1748,16 @@ a {
   .board-hero,
   .board-hero__controls,
   .topbar,
-  .preview-banner {
+  .preview-banner,
+  .board-editor,
+  .group-editor {
     display: grid;
     gap: 14px;
+  }
+
+  .board-editor,
+  .group-editor {
+    grid-template-columns: 1fr;
   }
 
   .topbar__meta {
@@ -1748,7 +1801,10 @@ a {
 
   .group-card__head,
   .roster-editor__head,
-  .roster-actions {
+  .roster-actions,
+  .group-card__actions,
+  .board-editor__actions,
+  .group-editor__actions {
     display: grid;
     justify-content: stretch;
   }
