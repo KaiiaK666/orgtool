@@ -142,11 +142,8 @@ function LoginScreen({
             <img className="brand-mark brand-mark--large" src={LOGO_SRC} alt="Organization Tool logo" />
             <div className="brand-copy">
               <span className="eyebrow">Organization Tool</span>
-              <h1>Simple projects that stay easy to read.</h1>
-              <p>Pick your profile, enter your password, and land directly in your own dashboard.</p>
-              <p>
-                Setup login: <strong>Miguel Castillo</strong> with password <strong>bertogden</strong>.
-              </p>
+              <h1>Dealership organizational tool</h1>
+              <p>Choose your profile and sign in.</p>
             </div>
           </div>
         </div>
@@ -559,9 +556,7 @@ function AdminView({ data, currentUser, newUserForm, setNewUserForm, onCreateUse
         </div>
         <div className="manifest-copy">
           <p>This area is for adding and removing people from the workspace without making the rest of the UI feel heavy.</p>
-          <p>
-            Current setup admin: <strong>Miguel Castillo</strong> with password <strong>bertogden</strong>.
-          </p>
+          <p>Use the admin account to manage who can access the workspace.</p>
         </div>
       </section>
 
@@ -668,11 +663,24 @@ export default function App() {
 
   async function load() {
     setLoading(true);
+    setError("");
+    let lastError = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const next = await getBootstrap();
+        setData(next);
+        setLoginUserId((current) => current || next.users.find((user) => user.active !== false)?.id || "");
+        setLoading(false);
+        return;
+      } catch (loadError) {
+        lastError = loadError;
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+        }
+      }
+    }
     try {
-      setError("");
-      const next = await getBootstrap();
-      setData(next);
-      setLoginUserId((current) => current || next.users.find((user) => user.active !== false)?.id || "");
+      throw lastError || new Error("Unable to load workspace");
     } catch (loadError) {
       setError(loadError.message || "Unable to load workspace");
     } finally {
