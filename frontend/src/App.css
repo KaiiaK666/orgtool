@@ -190,6 +190,57 @@ a {
   justify-content: flex-end;
 }
 
+.quick-login-strip {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+.quick-login-strip__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quick-login-strip__head small {
+  color: var(--muted);
+}
+
+.quick-login-strip__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.quick-login-user {
+  display: grid;
+  gap: 4px;
+  min-width: 144px;
+  padding: 12px 14px;
+  text-align: left;
+  border-radius: 16px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.quick-login-user small {
+  color: var(--muted);
+}
+
+.quick-login-user.is-active {
+  border-color: rgba(49, 86, 245, 0.32);
+  background: var(--accent-soft);
+}
+
+.quick-login-user__name {
+  font-weight: 700;
+}
+
 .login-card__topbar {
   display: flex;
   align-items: center;
@@ -979,6 +1030,9 @@ a {
 .project-card,
 .notice-card {
   text-align: left;
+  padding: 18px;
+  border-radius: 22px;
+  overflow: hidden;
 }
 
 .project-card {
@@ -1795,6 +1849,36 @@ a {
   gap: 14px;
 }
 
+.checkbox-row {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 12px !important;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+}
+
+.checkbox-row div {
+  display: grid;
+  gap: 4px;
+}
+
+.checkbox-row strong {
+  color: var(--text);
+}
+
+.checkbox-row small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .full-span {
   grid-column: 1 / -1;
 }
@@ -1929,6 +2013,11 @@ a {
 
   .login-shell__footer .ghost-button {
     width: 100%;
+  }
+
+  .quick-login-strip__head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .topbar__main {

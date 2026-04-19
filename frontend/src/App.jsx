@@ -235,6 +235,7 @@ function blankUser() {
     phone: "",
     password: "",
     active: true,
+    quick_login: false,
   };
 }
 
@@ -303,7 +304,20 @@ function TutorialOverlay({ onClose }) {
   );
 }
 
-function LoginScreen({ username, onUsernameChange, password, onPasswordChange, onSubmit, error, busy, theme, onToggleTheme, onOpenTutorial }) {
+function LoginScreen({
+  username,
+  onUsernameChange,
+  password,
+  onPasswordChange,
+  onSubmit,
+  error,
+  busy,
+  theme,
+  onToggleTheme,
+  onOpenTutorial,
+  quickLoginUsers,
+  onQuickLoginSelect,
+}) {
   return (
     <div className="login-screen">
       <div className="login-shell">
@@ -341,6 +355,28 @@ function LoginScreen({ username, onUsernameChange, password, onPasswordChange, o
               {busy ? "Entering..." : "Enter Workspace"}
             </button>
           </form>
+
+          {quickLoginUsers.length ? (
+            <div className="quick-login-strip">
+              <div className="quick-login-strip__head">
+                <span className="eyebrow">Quick login users</span>
+                <small>Tap a name to fill the username</small>
+              </div>
+              <div className="quick-login-strip__list">
+                {quickLoginUsers.map((user) => (
+                  <button
+                    key={user.id}
+                    type="button"
+                    className={cls("quick-login-user", username === user.username && "is-active")}
+                    onClick={() => onQuickLoginSelect(user.username)}
+                  >
+                    <span className="quick-login-user__name">{user.name}</span>
+                    <small>@{user.username}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className="login-shell__footer">
             <button type="button" className="ghost-button" onClick={onOpenTutorial}>
@@ -1152,6 +1188,7 @@ function AdminView({ data, currentUser, onCreateUser, onUpdateUser, onDeleteUser
             department: user.department || "General",
             password: "",
             active: user.active !== false,
+            quick_login: user.quick_login === true,
           },
         ])
       )
@@ -1194,6 +1231,7 @@ function AdminView({ data, currentUser, onCreateUser, onUpdateUser, onDeleteUser
     });
 
     if (draft.active !== (user.active !== false)) changes.active = draft.active;
+    if (draft.quick_login !== (user.quick_login === true)) changes.quick_login = draft.quick_login;
     if (draft.password.trim()) changes.password = draft.password.trim();
 
     if (!Object.keys(changes).length) return;
@@ -1263,6 +1301,17 @@ function AdminView({ data, currentUser, onCreateUser, onUpdateUser, onDeleteUser
               <span>Password</span>
               <input type="text" placeholder="Set a unique password" value={newUserForm.password} onChange={(event) => setNewUserForm((current) => ({ ...current, password: event.target.value }))} />
             </label>
+            <label className="checkbox-row full-span">
+              <input
+                type="checkbox"
+                checked={newUserForm.quick_login}
+                onChange={(event) => setNewUserForm((current) => ({ ...current, quick_login: event.target.checked }))}
+              />
+              <div>
+                <strong>Show on quick login bar</strong>
+                <small>Lets this user appear on the login page so they can tap their username.</small>
+              </div>
+            </label>
           </div>
 
           <button type="submit" disabled={busy === "create-user"}>
@@ -1296,6 +1345,7 @@ function AdminView({ data, currentUser, onCreateUser, onUpdateUser, onDeleteUser
 
                     <div className="roster-card__right">
                       <span className={cls("pill", `pill--${tone(user.role)}`)}>{user.role}</span>
+                      {user.quick_login ? <span className="pill pill--all">Quick login</span> : null}
                       {Number(user.id) === Number(currentUser.id) ? <span className="pill pill--current">Current</span> : null}
                     </div>
                   </div>
@@ -1339,6 +1389,13 @@ function AdminView({ data, currentUser, onCreateUser, onUpdateUser, onDeleteUser
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
                       </select>
+                    </label>
+                    <label className="checkbox-row full-span">
+                      <input type="checkbox" checked={draft.quick_login === true} onChange={(event) => setDraft(user.id, { quick_login: event.target.checked })} />
+                      <div>
+                        <strong>Show on quick login bar</strong>
+                        <small>Displays this user on the login page so they can tap their username.</small>
+                      </div>
                     </label>
                     <label className="full-span">
                       <span>New password</span>
@@ -1448,6 +1505,10 @@ export default function App() {
     () => visibleBoards.find((board) => Number(board.id) === Number(selectedBoardId)) || visibleBoards[0] || null,
     [visibleBoards, selectedBoardId]
   );
+  const quickLoginUsers = useMemo(
+    () => data.users.filter((user) => user.active !== false && user.quick_login === true && user.username),
+    [data.users]
+  );
 
   const isPreviewing = Boolean(adminSourceUser && Number(adminSourceUser.id) !== Number(currentUser?.id));
   const isAdmin = currentUser?.role === "Admin";
@@ -1513,6 +1574,21 @@ export default function App() {
 
   function toggleTheme() {
     setTheme((current) => (current === "dark" ? "light" : "dark"));
+  }
+
+  function handleLoginUsernameChange(value) {
+    setLoginUsername(value);
+    if (error) setError("");
+  }
+
+  function handleLoginPasswordChange(value) {
+    setLoginPassword(value);
+    if (error) setError("");
+  }
+
+  function handleQuickLoginSelect(nextUsername) {
+    setLoginUsername(nextUsername);
+    if (error) setError("");
   }
 
   function beginPreview(userId) {
@@ -1734,15 +1810,17 @@ export default function App() {
       <>
         <LoginScreen
           username={loginUsername}
-          onUsernameChange={setLoginUsername}
+          onUsernameChange={handleLoginUsernameChange}
           password={loginPassword}
-          onPasswordChange={setLoginPassword}
+          onPasswordChange={handleLoginPasswordChange}
           onSubmit={handleLogin}
           error={error}
           busy={busy === "login"}
           theme={theme}
           onToggleTheme={toggleTheme}
           onOpenTutorial={() => setShowTutorial(true)}
+          quickLoginUsers={quickLoginUsers}
+          onQuickLoginSelect={handleQuickLoginSelect}
         />
         {showTutorial ? <TutorialOverlay onClose={() => setShowTutorial(false)} /> : null}
       </>
