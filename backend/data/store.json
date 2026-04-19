@@ -1,0 +1,421 @@
+{
+  "stores": [
+    {
+      "id": 1,
+      "name": "Bert Ogden Kia",
+      "code": "KIA",
+      "city": "Edinburg",
+      "manager": "Kai Rivers",
+      "department_focus": "Sales",
+      "sales_target": 160,
+      "service_target": 1150,
+      "active": true
+    },
+    {
+      "id": 2,
+      "name": "Bert Ogden Mazda",
+      "code": "MAZ",
+      "city": "Edinburg",
+      "manager": "Maya Chen",
+      "department_focus": "Service",
+      "sales_target": 95,
+      "service_target": 820,
+      "active": true
+    },
+    {
+      "id": 3,
+      "name": "Bert Ogden Outlet",
+      "code": "OUT",
+      "city": "Mission",
+      "manager": "Jordan Reed",
+      "department_focus": "Used Cars",
+      "sales_target": 120,
+      "service_target": 0,
+      "active": true
+    }
+  ],
+  "users": [
+    {
+      "id": 1,
+      "name": "Kai Rivers",
+      "title": "General Sales Manager",
+      "role": "Admin",
+      "department": "Sales",
+      "store_id": 1,
+      "phone": "(956) 555-0101",
+      "active": true,
+      "avatar": "KR",
+      "password": "bertogden"
+    },
+    {
+      "id": 2,
+      "name": "Maya Chen",
+      "title": "Fixed Ops Director",
+      "role": "Manager",
+      "department": "Service",
+      "store_id": 2,
+      "phone": "(956) 555-0102",
+      "active": true,
+      "avatar": "MC",
+      "password": "maya2026"
+    },
+    {
+      "id": 3,
+      "name": "Jordan Reed",
+      "title": "BDC Manager",
+      "role": "Manager",
+      "department": "BDC",
+      "store_id": 1,
+      "phone": "(956) 555-0103",
+      "active": true,
+      "avatar": "JR",
+      "password": "jordan2026"
+    },
+    {
+      "id": 4,
+      "name": "Ava Martinez",
+      "title": "Marketing Lead",
+      "role": "Coordinator",
+      "department": "Marketing",
+      "store_id": 3,
+      "phone": "(956) 555-0104",
+      "active": true,
+      "avatar": "AM",
+      "password": "ava2026"
+    },
+    {
+      "id": 5,
+      "name": "Luis Gomez",
+      "title": "Service Advisor",
+      "role": "Staff",
+      "department": "Service",
+      "store_id": 2,
+      "phone": "(956) 555-0105",
+      "active": true,
+      "avatar": "LG",
+      "password": "luis2026"
+    }
+  ],
+  "announcements": [
+    {
+      "id": 1,
+      "title": "Weekend push",
+      "message": "Close out all open priority tasks before the Saturday desk meeting.",
+      "audience": "Sales",
+      "priority": "High",
+      "pinned": true
+    },
+    {
+      "id": 2,
+      "title": "Service loaners tight",
+      "message": "Route Mazda loaner approvals through Maya before confirming next-day pickup.",
+      "audience": "Service",
+      "priority": "Medium",
+      "pinned": true
+    }
+  ],
+  "settings": {
+    "permissions": [
+      {
+        "role": "Admin",
+        "can_manage_staff": true,
+        "can_manage_stores": true,
+        "can_edit_boards": true,
+        "can_publish_announcements": true,
+        "can_view_reports": true
+      },
+      {
+        "role": "Manager",
+        "can_manage_staff": true,
+        "can_manage_stores": false,
+        "can_edit_boards": true,
+        "can_publish_announcements": true,
+        "can_view_reports": true
+      },
+      {
+        "role": "Coordinator",
+        "can_manage_staff": false,
+        "can_manage_stores": false,
+        "can_edit_boards": true,
+        "can_publish_announcements": false,
+        "can_view_reports": true
+      },
+      {
+        "role": "Staff",
+        "can_manage_staff": false,
+        "can_manage_stores": false,
+        "can_edit_boards": false,
+        "can_publish_announcements": false,
+        "can_view_reports": false
+      }
+    ],
+    "pipeline_templates": [
+      {
+        "department": "Sales",
+        "stages": [
+          "Open",
+          "This Week",
+          "Done"
+        ]
+      },
+      {
+        "department": "Service",
+        "stages": [
+          "Tomorrow",
+          "Waiting",
+          "Delivered"
+        ]
+      },
+      {
+        "department": "Marketing",
+        "stages": [
+          "Queue",
+          "Review",
+          "Scheduled"
+        ]
+      }
+    ]
+  },
+  "boards": [
+    {
+      "id": 1,
+      "name": "Showroom Appointments",
+      "description": "Simple sales task board for appointments, follow-up, and completed deliveries.",
+      "color": "#4f6bed",
+      "department": "Sales",
+      "store_id": 1,
+      "fields": [],
+      "groups": [
+        {
+          "id": 11,
+          "name": "Open"
+        },
+        {
+          "id": 12,
+          "name": "This Week"
+        },
+        {
+          "id": 13,
+          "name": "Done"
+        }
+      ],
+      "tasks": [
+        {
+          "id": 101,
+          "group_id": 11,
+          "name": "Confirm Telluride showroom visit",
+          "status": "Working on it",
+          "priority": "High",
+          "owner_id": 1,
+          "store_id": 1,
+          "department": "Sales",
+          "category": "Appointment",
+          "customer_name": "Rosa Salinas",
+          "vehicle": "2024 Kia Telluride SX",
+          "due_date": "2026-04-18",
+          "effort": 1,
+          "notes": "Call after 5:30 PM.",
+          "custom_fields": {}
+        },
+        {
+          "id": 102,
+          "group_id": 12,
+          "name": "Confirm Saturday showroom visit",
+          "status": "Review",
+          "priority": "Medium",
+          "owner_id": 1,
+          "store_id": 1,
+          "department": "Sales",
+          "category": "Appointment",
+          "customer_name": "Hector Garza",
+          "vehicle": "2022 Silverado LT",
+          "due_date": "2026-04-19",
+          "effort": 1,
+          "notes": "Needs trade appraisal.",
+          "custom_fields": {}
+        },
+        {
+          "id": 103,
+          "group_id": 13,
+          "name": "Delivered Sportage appointment",
+          "status": "Done",
+          "priority": "Low",
+          "owner_id": 1,
+          "store_id": 1,
+          "department": "Sales",
+          "category": "Delivery",
+          "customer_name": "Jose Cantu",
+          "vehicle": "2024 Kia Sportage EX",
+          "due_date": "2026-04-17",
+          "effort": 1,
+          "notes": "Closed yesterday.",
+          "custom_fields": {}
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Service Lane Follow Up",
+      "description": "Simple service tasks, appointment prep, and declined-work saves.",
+      "color": "#0f9d7a",
+      "department": "Service",
+      "store_id": 2,
+      "fields": [
+        {
+          "id": 1,
+          "name": "RO #",
+          "type": "text"
+        }
+      ],
+      "groups": [
+        {
+          "id": 21,
+          "name": "Tomorrow Appointments"
+        },
+        {
+          "id": 22,
+          "name": "Waiting On Parts"
+        },
+        {
+          "id": 23,
+          "name": "Delivered"
+        }
+      ],
+      "tasks": [
+        {
+          "id": 201,
+          "group_id": 21,
+          "name": "Prep CX-5 estimate",
+          "status": "Not started",
+          "priority": "Medium",
+          "owner_id": 5,
+          "store_id": 2,
+          "department": "Service",
+          "category": "Appointment",
+          "customer_name": "Elena Torres",
+          "vehicle": "2019 Mazda CX-5",
+          "due_date": "2026-04-19",
+          "effort": 1,
+          "notes": "Likely brakes and tires.",
+          "custom_fields": {
+            "1": "48291"
+          }
+        },
+        {
+          "id": 202,
+          "group_id": 22,
+          "name": "Update Sorento backorder customer",
+          "status": "Working on it",
+          "priority": "High",
+          "owner_id": 2,
+          "store_id": 1,
+          "department": "Service",
+          "category": "Parts Delay",
+          "customer_name": "Marcos Pena",
+          "vehicle": "2021 Kia Sorento",
+          "due_date": "2026-04-20",
+          "effort": 1,
+          "notes": "Need ETA before noon.",
+          "custom_fields": {
+            "1": "48410"
+          }
+        },
+        {
+          "id": 203,
+          "group_id": 23,
+          "name": "Delivered brake upsell save",
+          "status": "Done",
+          "priority": "Low",
+          "owner_id": 5,
+          "store_id": 2,
+          "department": "Service",
+          "category": "Save",
+          "customer_name": "Rita Velasquez",
+          "vehicle": "2018 Mazda3",
+          "due_date": "2026-04-17",
+          "effort": 1,
+          "notes": "Customer approved after callback.",
+          "custom_fields": {
+            "1": "47982"
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Used Car Specials",
+      "description": "Simple marketing board for used inventory pushes and offer launches.",
+      "color": "#ff8b3d",
+      "department": "Marketing",
+      "store_id": 3,
+      "fields": [
+        {
+          "id": 1,
+          "name": "Channel",
+          "type": "tag"
+        },
+        {
+          "id": 2,
+          "name": "Launch Date",
+          "type": "date"
+        }
+      ],
+      "groups": [
+        {
+          "id": 31,
+          "name": "Creative Queue"
+        },
+        {
+          "id": 32,
+          "name": "Pending Approval"
+        },
+        {
+          "id": 33,
+          "name": "Scheduled"
+        }
+      ],
+      "tasks": [
+        {
+          "id": 301,
+          "group_id": 31,
+          "name": "Build weekend truck ad",
+          "status": "Working on it",
+          "priority": "High",
+          "owner_id": 4,
+          "store_id": 3,
+          "department": "Marketing",
+          "category": "Campaign",
+          "customer_name": "",
+          "vehicle": "F-150 / Silverado inventory",
+          "due_date": "2026-04-20",
+          "effort": 1,
+          "notes": "Need payment line from desk.",
+          "custom_fields": {
+            "1": "Facebook",
+            "2": "2026-04-20"
+          }
+        },
+        {
+          "id": 302,
+          "group_id": 32,
+          "name": "Approve Tahoe special tile",
+          "status": "Review",
+          "priority": "Medium",
+          "owner_id": 4,
+          "store_id": 3,
+          "department": "Marketing",
+          "category": "Graphic",
+          "customer_name": "",
+          "vehicle": "2021 Chevrolet Tahoe",
+          "due_date": "2026-04-19",
+          "effort": 1,
+          "notes": "Waiting on final price approval.",
+          "custom_fields": {
+            "1": "Instagram",
+            "2": "2026-04-21"
+          }
+        }
+      ]
+    }
+  ]
+}
