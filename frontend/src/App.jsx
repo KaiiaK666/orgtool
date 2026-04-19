@@ -18,6 +18,7 @@ const SESSION_KEY = "orgtool-session";
 const THEME_KEY = "orgtool-theme";
 const COLUMN_WIDTHS_KEY_PREFIX = "orgtool-column-widths";
 const LOGO_SRC = "/organization-tool-mark.png";
+const MOBILE_LAYOUT_QUERY = "(max-width: 900px)";
 const STATUS_OPTIONS = ["Overdue", "Pending", "Done"];
 const PRIORITY_OPTIONS = ["Critical", "High", "Medium", "Low"];
 const ROLE_OPTIONS = ["Admin", "Manager", "Coordinator", "Staff"];
@@ -31,6 +32,32 @@ const DEPARTMENT_OPTIONS = ["Leadership", "BDC", "Sales", "Service", "Marketing"
 
 function cls(...parts) {
   return parts.filter(Boolean).join(" ");
+}
+
+function useMediaQuery(query) {
+  const getMatches = () => {
+    if (typeof window === "undefined" || !window.matchMedia) return false;
+    return window.matchMedia(query).matches;
+  };
+
+  const [matches, setMatches] = useState(getMatches);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const media = window.matchMedia(query);
+    const handleChange = () => setMatches(media.matches);
+    handleChange();
+
+    if (media.addEventListener) {
+      media.addEventListener("change", handleChange);
+      return () => media.removeEventListener("change", handleChange);
+    }
+
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, [query]);
+
+  return matches;
 }
 
 function tone(value) {
@@ -563,6 +590,101 @@ function TaskRow({ task, board, users, onUpdateTask }) {
   );
 }
 
+function MobileTaskCard({ task, board, users, onUpdateTask }) {
+  function saveField(field, nextValue) {
+    const currentValue = task[field] ?? "";
+    if (String(currentValue) === String(nextValue ?? "")) return;
+    onUpdateTask(task.id, { [field]: nextValue || (field === "due_date" ? null : nextValue) });
+  }
+
+  function saveCustomField(field, rawValue) {
+    const currentValue = task.custom_fields?.[String(field.id)] ?? "";
+    let nextValue = rawValue;
+    if (field.type === "number") nextValue = rawValue === "" ? null : Number(rawValue);
+    if (field.type === "date") nextValue = rawValue || null;
+    if (String(currentValue ?? "") === String(nextValue ?? "")) return;
+    onUpdateTask(task.id, {
+      custom_fields: {
+        ...(task.custom_fields || {}),
+        [String(field.id)]: nextValue,
+      },
+    });
+  }
+
+  const rowStatus = visualStatus(task);
+
+  return (
+    <article className={cls("mobile-task-card", `mobile-task-card--${tone(rowStatus)}`)}>
+      <div className="mobile-task-card__head">
+        <input className="cell-input cell-input--task" defaultValue={task.name} onBlur={(event) => saveField("name", event.target.value.trim())} />
+        <span className={cls("pill", `pill--${tone(rowStatus)}`)}>{rowStatus}</span>
+      </div>
+
+      <div className="mobile-task-card__grid">
+        <label>
+          <span>Priority</span>
+          <select className={cls("cell-select", `cell-select--${tone(task.priority)}`)} value={task.priority} onChange={(event) => saveField("priority", event.target.value)}>
+            {PRIORITY_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          <span>Status</span>
+          <select className={cls("cell-select", `cell-select--${tone(rowStatus)}`)} value={task.status} onChange={(event) => saveField("status", event.target.value)}>
+            {STATUS_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          <span>Due</span>
+          <input className="cell-input cell-input--date" type="date" value={task.due_date || ""} onChange={(event) => saveField("due_date", event.target.value)} />
+        </label>
+
+        <label>
+          <span>Owner</span>
+          <select className="cell-select" value={task.owner_id ?? ""} onChange={(event) => saveField("owner_id", event.target.value ? Number(event.target.value) : null)}>
+            <option value="">Unassigned</option>
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="mobile-task-card__full">
+          <span>Notes</span>
+          <input className="cell-input" defaultValue={task.notes || ""} onBlur={(event) => saveField("notes", event.target.value)} />
+        </label>
+
+        {board.fields.map((field) => {
+          const value = task.custom_fields?.[String(field.id)] ?? "";
+          const inputType = field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
+          return (
+            <label key={`${task.id}-mobile-column-${field.id}`} className={field.type === "text" ? "mobile-task-card__full" : ""}>
+              <span>{field.name}</span>
+              <input
+                className={cls("cell-input", field.type === "tag" && value ? "cell-input--tagged" : "")}
+                type={inputType}
+                defaultValue={value ?? ""}
+                onBlur={(event) => saveCustomField(field, event.target.value)}
+              />
+            </label>
+          );
+        })}
+      </div>
+    </article>
+  );
+}
+
 function ProjectBoard({
   board,
   currentUser,
@@ -573,6 +695,7 @@ function ProjectBoard({
   onUpdateGroup,
   onCreateField,
   onUpdateBoard,
+  isMobile,
 }) {
   const [search, setSearch] = useState("");
   const [mineOnly, setMineOnly] = useState(false);
@@ -871,104 +994,127 @@ function ProjectBoard({
                 </form>
               ) : null}
 
-              <div className="board-table-wrap">
-                <table className="board-table">
-                  <colgroup>
-                    <col className="col-task" style={{ width: `${columnWidths.task}px` }} />
-                    <col className="col-priority" style={{ width: `${columnWidths.priority}px` }} />
-                    <col className="col-status" style={{ width: `${columnWidths.status}px` }} />
-                    <col className="col-date" style={{ width: `${columnWidths.due_date}px` }} />
-                    <col className="col-owner" style={{ width: `${columnWidths.owner}px` }} />
-                    <col className="col-notes" style={{ width: `${columnWidths.notes}px` }} />
-                    {board.fields.map((field) => (
-                      <col
-                        key={`column-width-${field.id}`}
-                        className={cls("col-custom", `col-custom--${field.type}`)}
-                        style={{ width: `${columnWidths[columnKeyForField(field)]}px` }}
-                      />
-                    ))}
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th>
-                        <div className="th-inner">
-                          <span>Task</span>
-                          <button type="button" className="col-resizer" aria-label="Resize task column" onMouseDown={(event) => startColumnResize("task", 320, event)} />
-                        </div>
-                      </th>
-                      <th>
-                        <div className="th-inner">
-                          <span>Priority</span>
-                          <button type="button" className="col-resizer" aria-label="Resize priority column" onMouseDown={(event) => startColumnResize("priority", 140, event)} />
-                        </div>
-                      </th>
-                      <th>
-                        <div className="th-inner">
-                          <span>Status</span>
-                          <button type="button" className="col-resizer" aria-label="Resize status column" onMouseDown={(event) => startColumnResize("status", 140, event)} />
-                        </div>
-                      </th>
-                      <th>
-                        <div className="th-inner">
-                          <span>Due</span>
-                          <button type="button" className="col-resizer" aria-label="Resize due date column" onMouseDown={(event) => startColumnResize("due_date", 150, event)} />
-                        </div>
-                      </th>
-                      <th>
-                        <div className="th-inner">
-                          <span>Owner</span>
-                          <button type="button" className="col-resizer" aria-label="Resize owner column" onMouseDown={(event) => startColumnResize("owner", 170, event)} />
-                        </div>
-                      </th>
-                      <th>
-                        <div className="th-inner">
-                          <span>Notes</span>
-                          <button type="button" className="col-resizer" aria-label="Resize notes column" onMouseDown={(event) => startColumnResize("notes", 220, event)} />
-                        </div>
-                      </th>
+              {isMobile ? (
+                <div className="mobile-task-list">
+                  {tasks.map((task) => (
+                    <MobileTaskCard key={task.id} task={task} board={board} users={users} onUpdateTask={onUpdateTask} />
+                  ))}
+                  <form className="add-task-inline add-task-inline--mobile" onSubmit={(event) => submitQuickTask(event, group.id)}>
+                    <button type="submit" className="plus-button plus-button--small">
+                      +
+                    </button>
+                    <input
+                      placeholder={`Add task to ${group.name}`}
+                      value={quickTasks[group.id] || ""}
+                      onChange={(event) =>
+                        setQuickTasks((current) => ({
+                          ...current,
+                          [group.id]: event.target.value,
+                        }))
+                      }
+                    />
+                  </form>
+                </div>
+              ) : (
+                <div className="board-table-wrap">
+                  <table className="board-table">
+                    <colgroup>
+                      <col className="col-task" style={{ width: `${columnWidths.task}px` }} />
+                      <col className="col-priority" style={{ width: `${columnWidths.priority}px` }} />
+                      <col className="col-status" style={{ width: `${columnWidths.status}px` }} />
+                      <col className="col-date" style={{ width: `${columnWidths.due_date}px` }} />
+                      <col className="col-owner" style={{ width: `${columnWidths.owner}px` }} />
+                      <col className="col-notes" style={{ width: `${columnWidths.notes}px` }} />
                       {board.fields.map((field) => (
-                        <th key={`column-head-${field.id}`}>
+                        <col
+                          key={`column-width-${field.id}`}
+                          className={cls("col-custom", `col-custom--${field.type}`)}
+                          style={{ width: `${columnWidths[columnKeyForField(field)]}px` }}
+                        />
+                      ))}
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>
                           <div className="th-inner">
-                            <span>{field.name}</span>
-                            <button
-                              type="button"
-                              className="col-resizer"
-                              aria-label={`Resize ${field.name} column`}
-                              onMouseDown={(event) =>
-                                startColumnResize(columnKeyForField(field), field.type === "number" ? 120 : field.type === "date" ? 150 : 160, event)
-                              }
-                            />
+                            <span>Task</span>
+                            <button type="button" className="col-resizer" aria-label="Resize task column" onMouseDown={(event) => startColumnResize("task", 320, event)} />
                           </div>
                         </th>
+                        <th>
+                          <div className="th-inner">
+                            <span>Priority</span>
+                            <button type="button" className="col-resizer" aria-label="Resize priority column" onMouseDown={(event) => startColumnResize("priority", 140, event)} />
+                          </div>
+                        </th>
+                        <th>
+                          <div className="th-inner">
+                            <span>Status</span>
+                            <button type="button" className="col-resizer" aria-label="Resize status column" onMouseDown={(event) => startColumnResize("status", 140, event)} />
+                          </div>
+                        </th>
+                        <th>
+                          <div className="th-inner">
+                            <span>Due</span>
+                            <button type="button" className="col-resizer" aria-label="Resize due date column" onMouseDown={(event) => startColumnResize("due_date", 150, event)} />
+                          </div>
+                        </th>
+                        <th>
+                          <div className="th-inner">
+                            <span>Owner</span>
+                            <button type="button" className="col-resizer" aria-label="Resize owner column" onMouseDown={(event) => startColumnResize("owner", 170, event)} />
+                          </div>
+                        </th>
+                        <th>
+                          <div className="th-inner">
+                            <span>Notes</span>
+                            <button type="button" className="col-resizer" aria-label="Resize notes column" onMouseDown={(event) => startColumnResize("notes", 220, event)} />
+                          </div>
+                        </th>
+                        {board.fields.map((field) => (
+                          <th key={`column-head-${field.id}`}>
+                            <div className="th-inner">
+                              <span>{field.name}</span>
+                              <button
+                                type="button"
+                                className="col-resizer"
+                                aria-label={`Resize ${field.name} column`}
+                                onMouseDown={(event) =>
+                                  startColumnResize(columnKeyForField(field), field.type === "number" ? 120 : field.type === "date" ? 150 : 160, event)
+                                }
+                              />
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tasks.map((task) => (
+                        <TaskRow key={task.id} task={task} board={board} users={users} onUpdateTask={onUpdateTask} />
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tasks.map((task) => (
-                      <TaskRow key={task.id} task={task} board={board} users={users} onUpdateTask={onUpdateTask} />
-                    ))}
-                    <tr className="add-row">
-                      <td colSpan={6 + board.fields.length}>
-                        <form className="add-task-inline" onSubmit={(event) => submitQuickTask(event, group.id)}>
-                          <button type="submit" className="plus-button plus-button--small">
-                            +
-                          </button>
-                          <input
-                            placeholder={`Add task to ${group.name}`}
-                            value={quickTasks[group.id] || ""}
-                            onChange={(event) =>
-                              setQuickTasks((current) => ({
-                                ...current,
-                                [group.id]: event.target.value,
-                              }))
-                            }
-                          />
-                        </form>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                      <tr className="add-row">
+                        <td colSpan={6 + board.fields.length}>
+                          <form className="add-task-inline" onSubmit={(event) => submitQuickTask(event, group.id)}>
+                            <button type="submit" className="plus-button plus-button--small">
+                              +
+                            </button>
+                            <input
+                              placeholder={`Add task to ${group.name}`}
+                              value={quickTasks[group.id] || ""}
+                              onChange={(event) =>
+                                setQuickTasks((current) => ({
+                                  ...current,
+                                  [group.id]: event.target.value,
+                                }))
+                              }
+                            />
+                          </form>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
           );
         })}
@@ -1251,6 +1397,8 @@ export default function App() {
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [projectForm, setProjectForm] = useState(blankProject(null));
   const [showTutorial, setShowTutorial] = useState(false);
+  const isMobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -1331,6 +1479,10 @@ export default function App() {
     if (!isAdmin && page === "admin") setPage("dashboard");
   }, [isAdmin, page]);
 
+  useEffect(() => {
+    setSidebarOpen(!isMobile);
+  }, [isMobile]);
+
   async function handleLogin(event) {
     event.preventDefault();
     setBusy("login");
@@ -1356,6 +1508,7 @@ export default function App() {
     setPage("dashboard");
     setLoginPassword("");
     setLoginUsername("");
+    setSidebarOpen(false);
   }
 
   function toggleTheme() {
@@ -1376,6 +1529,12 @@ export default function App() {
     saveSession(nextSession);
     setSession(nextSession);
     setPage("admin");
+  }
+
+  function navigateTo(nextPage, boardId = null) {
+    if (boardId !== null) setSelectedBoardId(boardId);
+    setPage(nextPage);
+    if (isMobile) setSidebarOpen(false);
   }
 
   function mutateBoard(boardId, updater) {
@@ -1599,14 +1758,21 @@ export default function App() {
         : "Manage users, usernames, passwords, access, and preview mode.";
 
   return (
-    <div className="workspace-shell">
-      <aside className="sidebar">
+    <div className={cls("workspace-shell", isMobile && "workspace-shell--mobile")}>
+      {isMobile && sidebarOpen ? <button type="button" className="sidebar-backdrop" aria-label="Close menu" onClick={() => setSidebarOpen(false)} /> : null}
+
+      <aside className={cls("sidebar", isMobile && "sidebar--mobile", sidebarOpen && "is-open")}>
         <div className="sidebar__brand">
           <img className="brand-mark" src={LOGO_SRC} alt="Organization Tool logo" />
           <div>
             <span className="eyebrow">Organization Tool</span>
             <h1>Dealer workflow</h1>
           </div>
+          {isMobile ? (
+            <button type="button" className="ghost-button sidebar-close" onClick={() => setSidebarOpen(false)}>
+              Close
+            </button>
+          ) : null}
         </div>
 
         <div className="current-user">
@@ -1620,14 +1786,14 @@ export default function App() {
         </div>
 
         <nav className="main-nav">
-          <button type="button" className={page === "dashboard" ? "is-active" : ""} onClick={() => setPage("dashboard")}>
+          <button type="button" className={page === "dashboard" ? "is-active" : ""} onClick={() => navigateTo("dashboard")}>
             Dashboard
           </button>
-          <button type="button" className={page === "project" ? "is-active" : ""} onClick={() => setPage("project")}>
+          <button type="button" className={page === "project" ? "is-active" : ""} onClick={() => navigateTo("project")}>
             Projects
           </button>
           {isAdmin ? (
-            <button type="button" className={page === "admin" ? "is-active" : ""} onClick={() => setPage("admin")}>
+            <button type="button" className={page === "admin" ? "is-active" : ""} onClick={() => navigateTo("admin")}>
               Admin
             </button>
           ) : null}
@@ -1647,10 +1813,7 @@ export default function App() {
                 key={board.id}
                 type="button"
                 className={cls("project-nav-item", Number(activeBoard?.id) === Number(board.id) && "is-active")}
-                onClick={() => {
-                  setSelectedBoardId(board.id);
-                  setPage("project");
-                }}
+                onClick={() => navigateTo("project", board.id)}
               >
                 <span className="project-swatch" style={{ background: board.color }} />
                 <div>
@@ -1704,10 +1867,17 @@ export default function App() {
 
       <main className="main-panel">
         <header className="topbar">
-          <div>
-            <span className="eyebrow">Workspace</span>
-            <h2>{pageTitle}</h2>
-            <p>{pageCopy}</p>
+          <div className="topbar__main">
+            {isMobile ? (
+              <button type="button" className="menu-button" onClick={() => setSidebarOpen(true)}>
+                Menu
+              </button>
+            ) : null}
+            <div>
+              <span className="eyebrow">Workspace</span>
+              <h2>{pageTitle}</h2>
+              <p>{pageCopy}</p>
+            </div>
           </div>
 
           <div className="topbar__meta">
@@ -1756,6 +1926,7 @@ export default function App() {
             onUpdateGroup={handleUpdateGroup}
             onCreateField={handleCreateField}
             onUpdateBoard={handleUpdateBoard}
+            isMobile={isMobile}
           />
         ) : null}
 
