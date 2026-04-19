@@ -3,24 +3,26 @@ import {
   createBoard,
   createBoardField,
   createGroup,
-  createStore,
   createTask,
   createUser,
+  deleteUser,
   getBootstrap,
   login,
   updateTask,
 } from "./api.js";
 
-const SESSION_KEY = "dealer-work-os-session";
+const SESSION_KEY = "orgtool-session";
+const LOGO_SRC = "/organization-tool-mark.png";
 const STATUS_OPTIONS = ["Not started", "Working on it", "Review", "Stuck", "Done"];
 const PRIORITY_OPTIONS = ["Critical", "High", "Medium", "Low"];
+const ROLE_OPTIONS = ["Admin", "Manager", "Coordinator", "Staff"];
 const FIELD_TYPE_OPTIONS = [
   { value: "text", label: "Text" },
   { value: "number", label: "Number" },
   { value: "date", label: "Date" },
   { value: "tag", label: "Tag" },
 ];
-const DEPARTMENT_OPTIONS = ["Sales", "BDC", "Service", "Marketing", "Finance", "Leadership", "General"];
+const DEPARTMENT_OPTIONS = ["Leadership", "BDC", "Sales", "Service", "Marketing", "Finance", "General"];
 
 function cls(...parts) {
   return parts.filter(Boolean).join(" ");
@@ -30,6 +32,16 @@ function tone(value) {
   return String(value || "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-");
+}
+
+function initials(name = "") {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
 }
 
 function priorityScore(priority) {
@@ -54,6 +66,23 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(parsed);
 }
 
+function boardProgress(board) {
+  const total = board.tasks?.length || 0;
+  const done = (board.tasks || []).filter((task) => task.status === "Done").length;
+  return { total, done, percent: total ? Math.round((done / total) * 100) : 0 };
+}
+
+function relevantBoards(boards, user) {
+  if (!user) return boards;
+  if (user.role === "Admin") return boards;
+  const filtered = boards.filter((board) => {
+    if (board.department && user.department && board.department === user.department) return true;
+    if ((board.tasks || []).some((task) => Number(task.owner_id) === Number(user.id))) return true;
+    return false;
+  });
+  return filtered.length ? filtered : boards;
+}
+
 function loadSession() {
   try {
     return JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
@@ -74,54 +103,23 @@ function blankProject(user) {
   return {
     name: "",
     description: "",
-    color: "#4f6bed",
-    department: user?.department || "Sales",
-    store_id: user?.store_id || "",
+    color: "#3156f5",
+    department: user?.department || "General",
+    store_id: null,
   };
 }
 
-function blankUser(storeId = "") {
+function blankUser() {
   return {
     name: "",
     title: "",
     role: "Staff",
-    department: "Sales",
-    store_id: storeId,
+    department: "General",
+    store_id: null,
     phone: "",
     password: "",
     active: true,
   };
-}
-
-function blankStore() {
-  return {
-    name: "",
-    code: "",
-    city: "",
-    manager: "",
-    department_focus: "Sales",
-    sales_target: 0,
-    service_target: 0,
-    active: true,
-  };
-}
-
-function boardProgress(board) {
-  const total = board.tasks?.length || 0;
-  const done = (board.tasks || []).filter((task) => task.status === "Done").length;
-  return { total, done, percent: total ? Math.round((done / total) * 100) : 0 };
-}
-
-function relevantBoards(boards, user) {
-  if (!user) return boards;
-  if (user.role === "Admin") return boards;
-  const filtered = boards.filter((board) => {
-    if (board.store_id && user.store_id && Number(board.store_id) === Number(user.store_id)) return true;
-    if (board.department && user.department && board.department === user.department) return true;
-    if ((board.tasks || []).some((task) => Number(task.owner_id) === Number(user.id))) return true;
-    return false;
-  });
-  return filtered.length ? filtered : boards;
 }
 
 function LoginScreen({
@@ -139,13 +137,18 @@ function LoginScreen({
   return (
     <div className="login-screen">
       <div className="login-card">
-        <div className="login-card__copy">
-          <span className="eyebrow">Bert Ogden Workspace</span>
-          <h1>Simple projects any dealership team can use fast.</h1>
-          <p>Select your profile, enter your own password, and go straight into your dashboard.</p>
-          <p>
-            Default admin login for setup: <strong>Kai Rivers</strong> with password <strong>bertogden</strong>.
-          </p>
+        <div className="login-card__hero">
+          <div className="brand-lockup">
+            <img className="brand-mark brand-mark--large" src={LOGO_SRC} alt="Organization Tool logo" />
+            <div className="brand-copy">
+              <span className="eyebrow">Organization Tool</span>
+              <h1>Simple projects that stay easy to read.</h1>
+              <p>Pick your profile, enter your password, and land directly in your own dashboard.</p>
+              <p>
+                Setup login: <strong>Miguel Castillo</strong> with password <strong>bertogden</strong>.
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="login-user-grid">
@@ -156,10 +159,10 @@ function LoginScreen({
               className={cls("login-user", Number(selectedUserId) === Number(user.id) && "is-active")}
               onClick={() => onSelectUser(user.id)}
             >
-              <span className="avatar">{user.avatar || user.name.slice(0, 2).toUpperCase()}</span>
+              <span className="avatar">{user.avatar || initials(user.name)}</span>
               <div>
                 <strong>{user.name}</strong>
-                <small>{user.title}</small>
+                <small>{user.title || user.department}</small>
               </div>
             </button>
           ))}
@@ -180,7 +183,7 @@ function LoginScreen({
   );
 }
 
-function DashboardView({ currentUser, boards, announcements, onOpenBoard, storesById }) {
+function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
   const myTasks = sortTasks(
     boards.flatMap((board) =>
       board.tasks
@@ -190,7 +193,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard, stores
   );
   const today = new Date().toISOString().slice(0, 10);
   const overdue = myTasks.filter((task) => task.due_date && task.due_date < today);
-  const dueSoon = myTasks.filter((task) => task.due_date && task.due_date >= today).slice(0, 5);
+  const dueThisWeek = myTasks.filter((task) => task.due_date && task.due_date >= today).slice(0, 5);
   const urgent = myTasks.filter((task) => ["Critical", "High"].includes(task.priority));
   const pinned = announcements.filter((item) => item.pinned);
 
@@ -224,20 +227,20 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard, stores
             </div>
           </div>
           <div className="activity-list">
-            {dueSoon.length ? (
-              dueSoon.map((task) => (
+            {dueThisWeek.length ? (
+              dueThisWeek.map((task) => (
                 <button key={task.id} type="button" className="activity-row" onClick={() => onOpenBoard(task.board_id)}>
                   <div>
                     <strong>{task.name}</strong>
                     <small>
-                      {task.board_name} - {formatDate(task.due_date)}
+                      {task.board_name} • {formatDate(task.due_date)}
                     </small>
                   </div>
                   <span className={cls("pill", `pill--${tone(task.priority)}`)}>{task.priority}</span>
                 </button>
               ))
             ) : (
-              <div className="empty-state">No due-soon items assigned to you.</div>
+              <div className="empty-state">No due-soon tasks are assigned to you.</div>
             )}
           </div>
         </section>
@@ -245,8 +248,8 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard, stores
         <section className="panel">
           <div className="panel__head">
             <div>
-              <span className="eyebrow">Pinned updates</span>
-              <h3>Workspace notes</h3>
+              <span className="eyebrow">Pinned notes</span>
+              <h3>Keep this simple</h3>
             </div>
           </div>
           <div className="notice-stack">
@@ -262,7 +265,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard, stores
                 </div>
               ))
             ) : (
-              <div className="empty-state">No pinned updates.</div>
+              <div className="empty-state">No pinned notes right now.</div>
             )}
           </div>
         </section>
@@ -281,8 +284,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard, stores
             return (
               <button key={board.id} type="button" className="project-card" onClick={() => onOpenBoard(board.id)}>
                 <div className="project-card__top">
-                  <span className="project-swatch" style={{ background: board.color }} />
-                  <span>{storesById.get(board.store_id)?.name || board.department}</span>
+                  <span className={cls("project-chip", `project-chip--${tone(board.department)}`)}>{board.department}</span>
                 </div>
                 <strong>{board.name}</strong>
                 <p>{board.description || "No description yet."}</p>
@@ -312,11 +314,11 @@ function TaskRow({ task, board, users, onUpdateTask }) {
   }
 
   function saveCustomField(field, rawValue) {
-    const current = task.custom_fields?.[String(field.id)] ?? "";
+    const currentValue = task.custom_fields?.[String(field.id)] ?? "";
     let nextValue = rawValue;
     if (field.type === "number") nextValue = rawValue === "" ? null : Number(rawValue);
     if (field.type === "date") nextValue = rawValue || null;
-    if (String(current ?? "") === String(nextValue ?? "")) return;
+    if (String(currentValue ?? "") === String(nextValue ?? "")) return;
     onUpdateTask(task.id, {
       custom_fields: {
         ...(task.custom_fields || {}),
@@ -365,14 +367,14 @@ function TaskRow({ task, board, users, onUpdateTask }) {
         <input className="cell-input" defaultValue={task.notes || ""} onBlur={(event) => saveField("notes", event.target.value)} />
       </td>
       {board.fields.map((field) => {
-        const rawValue = task.custom_fields?.[String(field.id)] ?? "";
+        const value = task.custom_fields?.[String(field.id)] ?? "";
         const inputType = field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
         return (
           <td key={`${task.id}-field-${field.id}`}>
             <input
-              className={cls("cell-input", field.type === "tag" && rawValue ? "cell-input--tagged" : "")}
+              className={cls("cell-input", field.type === "tag" && value ? "cell-input--tagged" : "")}
               type={inputType}
-              defaultValue={rawValue ?? ""}
+              defaultValue={value ?? ""}
               onBlur={(event) => saveCustomField(field, event.target.value)}
             />
           </td>
@@ -391,12 +393,12 @@ function ProjectBoard({ board, currentUser, users, onUpdateTask, onCreateTask, o
   const [fieldDraft, setFieldDraft] = useState({ name: "", type: "text" });
 
   useEffect(() => {
+    setSearch("");
+    setMineOnly(false);
     setQuickTasks({});
     setGroupName("");
     setShowFieldForm(false);
     setFieldDraft({ name: "", type: "text" });
-    setSearch("");
-    setMineOnly(false);
   }, [board.id]);
 
   function visibleTasksForGroup(groupId) {
@@ -425,7 +427,7 @@ function ProjectBoard({ board, currentUser, users, onUpdateTask, onCreateTask, o
     event.preventDefault();
     const name = fieldDraft.name.trim();
     if (!name) return;
-    onCreateField(fieldDraft);
+    onCreateField({ ...fieldDraft, name });
     setFieldDraft({ name: "", type: "text" });
     setShowFieldForm(false);
   }
@@ -442,14 +444,14 @@ function ProjectBoard({ board, currentUser, users, onUpdateTask, onCreateTask, o
     <div className="project-board">
       <section className="board-hero">
         <div>
-          <span className="eyebrow">Project</span>
+          <span className="eyebrow">{board.department}</span>
           <h2>{board.name}</h2>
-          <p>{board.description || "Simple project board for groups, tasks, priorities, and notes."}</p>
+          <p>{board.description || "Simple board for groups, tasks, priorities, due dates, and notes."}</p>
         </div>
         <div className="board-hero__controls">
           <input className="search" placeholder="Search tasks or notes" value={search} onChange={(event) => setSearch(event.target.value)} />
           <button type="button" className={cls("toggle-chip", mineOnly && "is-active")} onClick={() => setMineOnly((current) => !current)}>
-            {mineOnly ? "Only Mine" : "All Tasks"}
+            {mineOnly ? "Only mine" : "All tasks"}
           </button>
           <button type="button" className="plus-button" onClick={() => setShowFieldForm((current) => !current)}>
             + Add Field
@@ -473,7 +475,7 @@ function ProjectBoard({ board, currentUser, users, onUpdateTask, onCreateTask, o
               ))}
             </select>
           </label>
-          <button type="submit">Add Field</button>
+          <button type="submit">Add field</button>
         </form>
       ) : null}
 
@@ -495,7 +497,7 @@ function ProjectBoard({ board, currentUser, users, onUpdateTask, onCreateTask, o
                       <th>Task</th>
                       <th>Priority</th>
                       <th>Status</th>
-                      <th>Due Date</th>
+                      <th>Due</th>
                       <th>Owner</th>
                       <th>Notes</th>
                       {board.fields.map((field) => (
@@ -534,7 +536,7 @@ function ProjectBoard({ board, currentUser, users, onUpdateTask, onCreateTask, o
         })}
       </div>
 
-      <form className="panel inline-form" onSubmit={submitGroup}>
+      <form className="panel inline-form inline-form--group" onSubmit={submitGroup}>
         <label>
           <span>New group</span>
           <input placeholder="This Week" value={groupName} onChange={(event) => setGroupName(event.target.value)} />
@@ -545,45 +547,25 @@ function ProjectBoard({ board, currentUser, users, onUpdateTask, onCreateTask, o
   );
 }
 
-function GuideView() {
-  return (
-    <div className="settings-view">
-      <section className="panel help-panel">
-        <div className="panel__head">
-          <div>
-            <span className="eyebrow">Manifest</span>
-            <h3>How this workspace works</h3>
-          </div>
-        </div>
-        <div className="manifest-copy">
-          <p>This workspace stays intentionally simple. The main structure is users, projects, groups inside projects, and tasks inside those groups.</p>
-          <p>The default task surface is task name, priority, status, due date, owner, and notes. Anything extra should be added only when needed with the `+ Add Field` button inside a project.</p>
-          <p>Admin access is a separate page that only appears for admin users. That is where new users and new rooftops are created.</p>
-          <p>Recommended production subdomain: <strong>ops.bertogden123.com</strong>.</p>
-          <p>The full written manifest lives in <strong>MANIFEST.md</strong> in this project folder.</p>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function AdminView({ data, storesById, newUserForm, setNewUserForm, newStoreForm, setNewStoreForm, onCreateUser, onCreateStore }) {
+function AdminView({ data, currentUser, newUserForm, setNewUserForm, onCreateUser, onDeleteUser, busy }) {
   return (
     <div className="settings-view">
       <section className="panel help-panel">
         <div className="panel__head">
           <div>
             <span className="eyebrow">Admin</span>
-            <h3>User and rooftop setup</h3>
+            <h3>People management</h3>
           </div>
         </div>
         <div className="manifest-copy">
-          <p>Each user has their own unique password. New users are created here by an admin account.</p>
-          <p>Only admin users can see this page. The default setup admin is <strong>Kai Rivers</strong> with password <strong>bertogden</strong>.</p>
+          <p>This area is for adding and removing people from the workspace without making the rest of the UI feel heavy.</p>
+          <p>
+            Current setup admin: <strong>Miguel Castillo</strong> with password <strong>bertogden</strong>.
+          </p>
         </div>
       </section>
 
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--admin">
         <form className="panel" onSubmit={onCreateUser}>
           <div className="panel__head">
             <div>
@@ -603,10 +585,11 @@ function AdminView({ data, storesById, newUserForm, setNewUserForm, newStoreForm
             <label>
               <span>Role</span>
               <select value={newUserForm.role} onChange={(event) => setNewUserForm((current) => ({ ...current, role: event.target.value }))}>
-                <option value="Admin">Admin</option>
-                <option value="Manager">Manager</option>
-                <option value="Coordinator">Coordinator</option>
-                <option value="Staff">Staff</option>
+                {ROLE_OPTIONS.map((role) => (
+                  <option key={role} value={role}>
+                    {role}
+                  </option>
+                ))}
               </select>
             </label>
             <label>
@@ -619,59 +602,16 @@ function AdminView({ data, storesById, newUserForm, setNewUserForm, newStoreForm
                 ))}
               </select>
             </label>
-            <label>
-              <span>Store</span>
-              <select value={newUserForm.store_id} onChange={(event) => setNewUserForm((current) => ({ ...current, store_id: event.target.value }))}>
-                <option value="">No store</option>
-                {data.stores.map((store) => (
-                  <option key={store.id} value={store.id}>
-                    {store.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>Phone</span>
-              <input value={newUserForm.phone} onChange={(event) => setNewUserForm((current) => ({ ...current, phone: event.target.value }))} />
-            </label>
             <label className="full-span">
               <span>Password</span>
               <input type="password" value={newUserForm.password} onChange={(event) => setNewUserForm((current) => ({ ...current, password: event.target.value }))} />
             </label>
           </div>
-          <button type="submit">Add User</button>
+          <button type="submit" disabled={busy === "create-user"}>
+            {busy === "create-user" ? "Adding..." : "Add User"}
+          </button>
         </form>
 
-        <form className="panel" onSubmit={onCreateStore}>
-          <div className="panel__head">
-            <div>
-              <span className="eyebrow">Rooftops</span>
-              <h3>Add store</h3>
-            </div>
-          </div>
-          <div className="form-grid">
-            <label>
-              <span>Name</span>
-              <input value={newStoreForm.name} onChange={(event) => setNewStoreForm((current) => ({ ...current, name: event.target.value }))} />
-            </label>
-            <label>
-              <span>Code</span>
-              <input value={newStoreForm.code} onChange={(event) => setNewStoreForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} />
-            </label>
-            <label>
-              <span>City</span>
-              <input value={newStoreForm.city} onChange={(event) => setNewStoreForm((current) => ({ ...current, city: event.target.value }))} />
-            </label>
-            <label>
-              <span>Manager</span>
-              <input value={newStoreForm.manager} onChange={(event) => setNewStoreForm((current) => ({ ...current, manager: event.target.value }))} />
-            </label>
-          </div>
-          <button type="submit">Add Store</button>
-        </form>
-      </div>
-
-      <div className="dashboard-grid">
         <section className="panel">
           <div className="panel__head">
             <div>
@@ -679,38 +619,24 @@ function AdminView({ data, storesById, newUserForm, setNewUserForm, newStoreForm
               <h3>Workspace roster</h3>
             </div>
           </div>
-          <div className="activity-list">
+          <div className="roster-list">
             {data.users.map((user) => (
-              <div key={user.id} className="activity-row activity-row--static">
-                <div>
-                  <strong>{user.name}</strong>
-                  <small>
-                    {user.title} - {storesById.get(user.store_id)?.name || "No store"}
-                  </small>
+              <div key={user.id} className="roster-card">
+                <div className="roster-card__left">
+                  <span className="avatar">{user.avatar || initials(user.name)}</span>
+                  <div>
+                    <strong>{user.name}</strong>
+                    <small>
+                      {user.title || "No title"} • {user.department}
+                    </small>
+                  </div>
                 </div>
-                <span className="pill pill--medium">{user.role}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel">
-          <div className="panel__head">
-            <div>
-              <span className="eyebrow">Current stores</span>
-              <h3>Dealership rooftops</h3>
-            </div>
-          </div>
-          <div className="activity-list">
-            {data.stores.map((store) => (
-              <div key={store.id} className="activity-row activity-row--static">
-                <div>
-                  <strong>{store.name}</strong>
-                  <small>
-                    {store.code} - {store.city}
-                  </small>
+                <div className="roster-card__right">
+                  <span className={cls("pill", `pill--${tone(user.role)}`)}>{user.role}</span>
+                  <button type="button" className="ghost-button ghost-button--danger" onClick={() => onDeleteUser(user.id)} disabled={Number(user.id) === Number(currentUser.id)}>
+                    Remove
+                  </button>
                 </div>
-                <span className="pill pill--low">{store.manager || "No manager"}</span>
               </div>
             ))}
           </div>
@@ -738,8 +664,7 @@ export default function App() {
   const [loginUserId, setLoginUserId] = useState("");
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [projectForm, setProjectForm] = useState(blankProject(null));
-  const [newUserForm, setNewUserForm] = useState(blankUser(""));
-  const [newStoreForm, setNewStoreForm] = useState(blankStore());
+  const [newUserForm, setNewUserForm] = useState(blankUser());
 
   async function load() {
     setLoading(true);
@@ -763,7 +688,7 @@ export default function App() {
     () => data.users.find((user) => Number(user.id) === Number(session?.user_id)) || null,
     [data.users, session?.user_id]
   );
-  const storesById = useMemo(() => new Map(data.stores.map((store) => [store.id, store])), [data.stores]);
+  const activeUsers = useMemo(() => data.users.filter((user) => user.active !== false), [data.users]);
   const visibleBoards = useMemo(() => relevantBoards(data.boards, currentUser), [data.boards, currentUser]);
   const activeBoard = useMemo(
     () => visibleBoards.find((board) => Number(board.id) === Number(selectedBoardId)) || visibleBoards[0] || null,
@@ -775,7 +700,7 @@ export default function App() {
       clearSession();
       setSession(null);
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, session]);
 
   useEffect(() => {
     if (!activeBoard && visibleBoards.length) setSelectedBoardId(visibleBoards[0].id);
@@ -784,7 +709,7 @@ export default function App() {
   useEffect(() => {
     if (currentUser) {
       setProjectForm(blankProject(currentUser));
-      setNewUserForm(blankUser(currentUser.store_id || ""));
+      setNewUserForm(blankUser());
     }
   }, [currentUser?.id]);
 
@@ -809,8 +734,8 @@ export default function App() {
   function handleLogout() {
     clearSession();
     setSession(null);
-    setLoginPassword("");
     setPage("dashboard");
+    setLoginPassword("");
   }
 
   function mutateBoard(boardId, updater) {
@@ -830,7 +755,7 @@ export default function App() {
       const board = await createBoard({
         ...projectForm,
         name,
-        store_id: Number(projectForm.store_id) || null,
+        store_id: null,
       });
       setData((current) => ({ ...current, boards: [...current.boards, board] }));
       setSelectedBoardId(board.id);
@@ -884,7 +809,7 @@ export default function App() {
         status: "Not started",
         priority: "Medium",
         owner_id: currentUser.id,
-        store_id: activeBoard.store_id || currentUser.store_id || null,
+        store_id: null,
         department: activeBoard.department || currentUser.department || "General",
         category: "Task",
         customer_name: "",
@@ -928,10 +853,10 @@ export default function App() {
         ...newUserForm,
         name,
         password,
-        store_id: Number(newUserForm.store_id) || null,
+        store_id: null,
       });
       setData((current) => ({ ...current, users: [...current.users, user] }));
-      setNewUserForm(blankUser(currentUser?.store_id || ""));
+      setNewUserForm(blankUser());
     } catch (submitError) {
       setError(submitError.message || "Unable to create user");
     } finally {
@@ -939,32 +864,29 @@ export default function App() {
     }
   }
 
-  async function handleCreateStore(event) {
-    event.preventDefault();
-    const name = newStoreForm.name.trim();
-    const code = newStoreForm.code.trim();
-    if (!name || !code) return;
-    setBusy("create-store");
+  async function handleDeleteUser(userId) {
+    setBusy(`delete-user-${userId}`);
     setError("");
     try {
-      const store = await createStore({
-        ...newStoreForm,
-        name,
-        code,
-        sales_target: Number(newStoreForm.sales_target) || 0,
-        service_target: Number(newStoreForm.service_target) || 0,
-      });
-      setData((current) => ({ ...current, stores: [...current.stores, store] }));
-      setNewStoreForm(blankStore());
+      await deleteUser(userId);
+      setData((current) => ({
+        ...current,
+        users: current.users.filter((user) => Number(user.id) !== Number(userId)),
+        boards: current.boards.map((board) => ({
+          ...board,
+          tasks: board.tasks.map((task) => (Number(task.owner_id) === Number(userId) ? { ...task, owner_id: null } : task)),
+        })),
+      }));
+      if (Number(currentUser?.id) === Number(userId)) handleLogout();
     } catch (submitError) {
-      setError(submitError.message || "Unable to create store");
+      setError(submitError.message || "Unable to remove user");
     } finally {
       setBusy("");
     }
   }
 
   if (loading) {
-    return <div className="loading-screen">Loading workspace...</div>;
+    return <div className="loading-screen">Loading Organization Tool...</div>;
   }
 
   if (!session || !currentUser) {
@@ -983,23 +905,31 @@ export default function App() {
   }
 
   const isAdmin = currentUser.role === "Admin";
+  const pageTitle =
+    page === "dashboard" ? "My Dashboard" : page === "project" ? activeBoard?.name || "Projects" : "Admin";
+  const pageCopy =
+    page === "dashboard"
+      ? "Your projects, due dates, and priorities in one place."
+      : page === "project"
+        ? "Keep groups simple and update the board directly."
+        : "Add and remove people without touching the rest of the workspace.";
 
   return (
     <div className="workspace-shell">
       <aside className="sidebar">
         <div className="sidebar__brand">
-          <span className="brand-dot" />
+          <img className="brand-mark" src={LOGO_SRC} alt="Organization Tool logo" />
           <div>
-            <span className="eyebrow">Bert Ogden</span>
-            <h1>Dealer Work OS</h1>
+            <span className="eyebrow">Organization Tool</span>
+            <h1>Simple workboards</h1>
           </div>
         </div>
 
         <div className="current-user">
-          <span className="avatar">{currentUser.avatar || currentUser.name.slice(0, 2).toUpperCase()}</span>
+          <span className="avatar">{currentUser.avatar || initials(currentUser.name)}</span>
           <div>
             <strong>{currentUser.name}</strong>
-            <small>{currentUser.title}</small>
+            <small>{currentUser.title || currentUser.department}</small>
           </div>
         </div>
 
@@ -1009,9 +939,6 @@ export default function App() {
           </button>
           <button type="button" className={page === "project" ? "is-active" : ""} onClick={() => setPage("project")}>
             Projects
-          </button>
-          <button type="button" className={page === "guide" ? "is-active" : ""} onClick={() => setPage("guide")}>
-            Guide
           </button>
           {isAdmin ? (
             <button type="button" className={page === "admin" ? "is-active" : ""} onClick={() => setPage("admin")}>
@@ -1072,17 +999,6 @@ export default function App() {
               </select>
             </label>
             <label>
-              <span>Store</span>
-              <select value={projectForm.store_id} onChange={(event) => setProjectForm((current) => ({ ...current, store_id: event.target.value }))}>
-                <option value="">No store</option>
-                {data.stores.map((store) => (
-                  <option key={store.id} value={store.id}>
-                    {store.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
               <span>Color</span>
               <input type="color" value={projectForm.color} onChange={(event) => setProjectForm((current) => ({ ...current, color: event.target.value }))} />
             </label>
@@ -1101,18 +1017,11 @@ export default function App() {
         <header className="topbar">
           <div>
             <span className="eyebrow">Workspace</span>
-            <h2>
-              {page === "dashboard"
-                ? "My Dashboard"
-                : page === "project"
-                  ? activeBoard?.name || "Projects"
-                  : page === "guide"
-                    ? "Guide"
-                    : "Admin"}
-            </h2>
+            <h2>{pageTitle}</h2>
+            <p>{pageCopy}</p>
           </div>
           <div className="topbar__meta">
-            <span>{storesById.get(currentUser.store_id)?.name || currentUser.department}</span>
+            <span className={cls("pill", `pill--${tone(currentUser.department)}`)}>{currentUser.department}</span>
           </div>
         </header>
 
@@ -1127,7 +1036,6 @@ export default function App() {
               setSelectedBoardId(boardId);
               setPage("project");
             }}
-            storesById={storesById}
           />
         ) : null}
 
@@ -1135,7 +1043,7 @@ export default function App() {
           <ProjectBoard
             board={activeBoard}
             currentUser={currentUser}
-            users={data.users.filter((user) => user.active !== false)}
+            users={activeUsers}
             onUpdateTask={handleUpdateTask}
             onCreateTask={handleCreateTask}
             onCreateGroup={handleCreateGroup}
@@ -1143,18 +1051,15 @@ export default function App() {
           />
         ) : null}
 
-        {page === "guide" ? <GuideView /> : null}
-
         {page === "admin" && isAdmin ? (
           <AdminView
             data={data}
-            storesById={storesById}
+            currentUser={currentUser}
             newUserForm={newUserForm}
             setNewUserForm={setNewUserForm}
-            newStoreForm={newStoreForm}
-            setNewStoreForm={setNewStoreForm}
             onCreateUser={handleCreateUser}
-            onCreateStore={handleCreateStore}
+            onDeleteUser={handleDeleteUser}
+            busy={busy}
           />
         ) : null}
       </main>

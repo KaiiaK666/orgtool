@@ -1,8 +1,8 @@
-# Bert Ogden Dealer Work OS Manifest
+# Organization Tool Manifest
 
 ## Purpose
 
-This app is a lightweight internal workspace for Bert Ogden dealership teams.
+This app is a lightweight internal workspace for teams that need simple project tracking without CRM clutter.
 
 The goal is not to overwhelm users with a giant CRM-style interface. The goal is:
 
@@ -86,9 +86,9 @@ The settings area is meant to stay light.
 Current purpose:
 
 - add users
-- add rooftops
+- remove users
 - explain how the workspace works
-- hold deployment notes
+- keep the setup intentionally light
 
 It should not turn into a bulky back-office screen unless there is a clear operational need.
 
@@ -97,7 +97,7 @@ It should not turn into a bulky back-office screen unless there is a clear opera
 Default admin setup account:
 
 ```text
-User: Kai Rivers
+User: Miguel Castillo
 Password: bertogden
 ```
 
@@ -113,7 +113,7 @@ organize.bertogden123.com
 
 Reason:
 
-- `app.bertogden123.com` is already used by the dealership scheduling app
+- `app.bertogden123.com` is already used by the scheduling app
 - `organize.bertogden123.com` keeps this tool clearly separate
 - the name matches the product purpose well
 
