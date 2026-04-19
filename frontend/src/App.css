@@ -608,6 +608,8 @@ a {
   border-radius: 24px;
   position: relative;
   overflow: hidden;
+  background: var(--surface);
+  color: var(--text);
 }
 
 .project-card::before {
@@ -620,19 +622,26 @@ a {
   opacity: 0.95;
 }
 
+.project-card strong,
+.project-card p,
+.project-card small {
+  position: relative;
+  z-index: 1;
+}
+
 .project-card--overdue {
-  background: linear-gradient(180deg, var(--panel), color-mix(in srgb, var(--danger-bg) 70%, var(--panel)));
-  border-color: var(--danger-line);
+  background: linear-gradient(180deg, var(--surface), rgba(209, 79, 63, 0.08));
+  border-color: rgba(209, 79, 63, 0.34);
 }
 
 .project-card--pending {
-  background: linear-gradient(180deg, var(--panel), color-mix(in srgb, var(--pending-bg) 75%, var(--panel)));
-  border-color: var(--pending-line);
+  background: linear-gradient(180deg, var(--surface), rgba(125, 139, 167, 0.12));
+  border-color: rgba(125, 139, 167, 0.34);
 }
 
 .project-card--done {
-  background: linear-gradient(180deg, var(--panel), color-mix(in srgb, var(--success-bg) 78%, var(--panel)));
-  border-color: var(--success-line);
+  background: linear-gradient(180deg, var(--surface), rgba(31, 138, 76, 0.09));
+  border-color: rgba(31, 138, 76, 0.34);
 }
 
 .project-chip,
@@ -959,7 +968,7 @@ a {
 
 .task-row td:first-child {
   border-radius: 16px 0 0 16px;
-  border-left: 8px solid transparent;
+  border-left: 10px solid transparent;
 }
 
 .task-row td:last-child {
@@ -967,7 +976,9 @@ a {
 }
 
 .task-row--overdue td {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--danger-bg) 92%, white), var(--danger-bg));
+  background: linear-gradient(90deg, rgba(209, 79, 63, 0.26), rgba(209, 79, 63, 0.12));
+  border-top-color: rgba(209, 79, 63, 0.28);
+  border-bottom-color: rgba(209, 79, 63, 0.28);
 }
 
 .task-row--overdue td:first-child {
@@ -975,7 +986,9 @@ a {
 }
 
 .task-row--pending td {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--pending-bg) 92%, white), var(--pending-bg));
+  background: linear-gradient(90deg, rgba(125, 139, 167, 0.22), rgba(125, 139, 167, 0.1));
+  border-top-color: rgba(125, 139, 167, 0.24);
+  border-bottom-color: rgba(125, 139, 167, 0.24);
 }
 
 .task-row--pending td:first-child {
@@ -983,7 +996,9 @@ a {
 }
 
 .task-row--done td {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--success-bg) 92%, white), var(--success-bg));
+  background: linear-gradient(90deg, rgba(31, 138, 76, 0.24), rgba(31, 138, 76, 0.1));
+  border-top-color: rgba(31, 138, 76, 0.26);
+  border-bottom-color: rgba(31, 138, 76, 0.26);
 }
 
 .task-row--done td:first-child {
@@ -1000,12 +1015,14 @@ a {
 
 .task-row .cell-input,
 .task-row .cell-select {
-  background: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(22, 34, 58, 0.12);
 }
 
 :root[data-theme="dark"] .task-row .cell-input,
 :root[data-theme="dark"] .task-row .cell-select {
-  background: rgba(12, 18, 31, 0.44);
+  background: rgba(12, 18, 31, 0.72);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .cell-input--task {
