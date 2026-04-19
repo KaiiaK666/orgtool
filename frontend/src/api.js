@@ -100,6 +100,13 @@ export function createGroup(payload) {
   return request("/api/groups", { method: "POST", body: JSON.stringify(payload) }).then(unwrap("group"));
 }
 
+export function updateGroup(boardId, groupId, payload) {
+  return request(`/api/boards/${boardId}/groups/${groupId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  }).then(unwrap("group"));
+}
+
 export function createTask(payload) {
   return request("/api/tasks", { method: "POST", body: JSON.stringify(payload) }).then(unwrap("task"));
 }

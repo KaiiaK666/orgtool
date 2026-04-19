@@ -8,15 +8,19 @@ import {
   deleteUser,
   getBootstrap,
   login,
+  updateBoard,
+  updateGroup,
   updateTask,
+  updateUser,
 } from "./api.js";
 
 const SESSION_KEY = "orgtool-session";
+const THEME_KEY = "orgtool-theme";
 const LOGO_SRC = "/organization-tool-mark.png";
-const STATUS_OPTIONS = ["Not started", "Working on it", "Review", "Stuck", "Done"];
+const STATUS_OPTIONS = ["Overdue", "Pending", "Done"];
 const PRIORITY_OPTIONS = ["Critical", "High", "Medium", "Low"];
 const ROLE_OPTIONS = ["Admin", "Manager", "Coordinator", "Staff"];
-const FIELD_TYPE_OPTIONS = [
+const COLUMN_TYPE_OPTIONS = [
   { value: "text", label: "Text" },
   { value: "number", label: "Number" },
   { value: "date", label: "Date" },
@@ -48,8 +52,19 @@ function priorityScore(priority) {
   return { Critical: 4, High: 3, Medium: 2, Low: 1 }[priority] || 0;
 }
 
+function visualStatus(task) {
+  if (task.status === "Done") return "Done";
+  const today = new Date().toISOString().slice(0, 10);
+  if (task.status === "Overdue") return "Overdue";
+  if (task.due_date && task.due_date < today) return "Overdue";
+  return "Pending";
+}
+
 function sortTasks(tasks) {
+  const statusRank = { Overdue: 0, Pending: 1, Done: 2 };
   return [...tasks].sort((left, right) => {
+    const statusGap = statusRank[visualStatus(left)] - statusRank[visualStatus(right)];
+    if (statusGap !== 0) return statusGap;
     const priorityGap = priorityScore(right.priority) - priorityScore(left.priority);
     if (priorityGap !== 0) return priorityGap;
     const leftDue = left.due_date || "9999-12-31";
@@ -99,6 +114,15 @@ function clearSession() {
   localStorage.removeItem(SESSION_KEY);
 }
 
+function loadTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  return saved === "dark" ? "dark" : "light";
+}
+
+function saveTheme(theme) {
+  localStorage.setItem(THEME_KEY, theme);
+}
+
 function blankProject(user) {
   return {
     name: "",
@@ -122,6 +146,14 @@ function blankUser() {
   };
 }
 
+function ThemeToggle({ theme, onToggle, compact = false }) {
+  return (
+    <button type="button" className={cls("theme-toggle", compact && "theme-toggle--compact")} onClick={onToggle}>
+      {theme === "dark" ? "Light mode" : "Dark mode"}
+    </button>
+  );
+}
+
 function LoginScreen({
   users,
   selectedUserId,
@@ -131,50 +163,78 @@ function LoginScreen({
   onSubmit,
   error,
   busy,
+  theme,
+  onToggleTheme,
 }) {
   const activeUsers = users.filter((user) => user.active !== false);
+  const selectedUser = activeUsers.find((user) => Number(user.id) === Number(selectedUserId)) || activeUsers[0] || null;
 
   return (
     <div className="login-screen">
+      <div className="login-screen__actions">
+        <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+      </div>
+
       <div className="login-card">
-        <div className="login-card__hero">
-          <div className="brand-lockup">
+        <section className="login-hero">
+          <div className="brand-lockup brand-lockup--login">
             <img className="brand-mark brand-mark--large" src={LOGO_SRC} alt="Organization Tool logo" />
             <div className="brand-copy">
               <span className="eyebrow">Organization Tool</span>
               <h1>Dealership organizational tool</h1>
-              <p>Choose your profile and sign in.</p>
+              <p>Simple projects, clean task groups, fast status changes, and a login screen your team can understand without training.</p>
             </div>
           </div>
-        </div>
 
-        <div className="login-user-grid">
-          {activeUsers.map((user) => (
-            <button
-              key={user.id}
-              type="button"
-              className={cls("login-user", Number(selectedUserId) === Number(user.id) && "is-active")}
-              onClick={() => onSelectUser(user.id)}
-            >
-              <span className="avatar">{user.avatar || initials(user.name)}</span>
-              <div>
-                <strong>{user.name}</strong>
-                <small>{user.title || user.department}</small>
-              </div>
+          <div className="login-note">
+            <strong>Sign-in flow</strong>
+            <p>Pick a profile, enter the password for that user, and go straight into that person’s workspace.</p>
+          </div>
+        </section>
+
+        <section className="login-panel">
+          <div className="login-panel__head">
+            <div>
+              <span className="eyebrow">Choose profile</span>
+              <h2>{selectedUser ? selectedUser.name : "Workspace login"}</h2>
+            </div>
+            {selectedUser ? <span className={cls("pill", `pill--${tone(selectedUser.role)}`)}>{selectedUser.title || selectedUser.role}</span> : null}
+          </div>
+
+          <div className="login-user-grid">
+            {activeUsers.map((user) => (
+              <button
+                key={user.id}
+                type="button"
+                className={cls("login-user", Number(selectedUserId) === Number(user.id) && "is-active")}
+                onClick={() => onSelectUser(user.id)}
+              >
+                <span className="avatar">{user.avatar || initials(user.name)}</span>
+                <div>
+                  <strong>{user.name}</strong>
+                  <small>{user.title || user.department}</small>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <form className="login-form" onSubmit={onSubmit}>
+            <label>
+              <span>Password</span>
+              <input
+                type="password"
+                autoComplete="current-password"
+                placeholder={selectedUser ? `Password for ${selectedUser.name}` : "Password"}
+                value={password}
+                onChange={(event) => onPasswordChange(event.target.value)}
+              />
+            </label>
+            {error ? <div className="error-banner">{error}</div> : null}
+            <button type="submit" disabled={busy || !selectedUserId || !password.trim()}>
+              {busy ? "Entering..." : "Enter Workspace"}
             </button>
-          ))}
-        </div>
-
-        <form className="login-form" onSubmit={onSubmit}>
-          <label>
-            <span>Password</span>
-            <input type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} />
-          </label>
-          {error ? <div className="error-banner">{error}</div> : null}
-          <button type="submit" disabled={busy || !selectedUserId || !password.trim()}>
-            {busy ? "Entering..." : "Enter Workspace"}
-          </button>
-        </form>
+          </form>
+        </section>
       </div>
     </div>
   );
@@ -189,8 +249,8 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
     )
   );
   const today = new Date().toISOString().slice(0, 10);
-  const overdue = myTasks.filter((task) => task.due_date && task.due_date < today);
-  const dueThisWeek = myTasks.filter((task) => task.due_date && task.due_date >= today).slice(0, 5);
+  const overdue = myTasks.filter((task) => visualStatus(task) === "Overdue");
+  const dueSoon = myTasks.filter((task) => task.due_date && task.due_date >= today).slice(0, 5);
   const urgent = myTasks.filter((task) => ["Critical", "High"].includes(task.priority));
   const pinned = announcements.filter((item) => item.pinned);
 
@@ -198,7 +258,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
     <div className="dashboard-view">
       <section className="stats">
         <article className="stat-card">
-          <span>Assigned to you</span>
+          <span>Assigned</span>
           <strong>{myTasks.length}</strong>
         </article>
         <article className="stat-card">
@@ -220,24 +280,27 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
           <div className="panel__head">
             <div>
               <span className="eyebrow">My work</span>
-              <h3>Due soon</h3>
+              <h3>What needs attention</h3>
             </div>
           </div>
           <div className="activity-list">
-            {dueThisWeek.length ? (
-              dueThisWeek.map((task) => (
-                <button key={task.id} type="button" className="activity-row" onClick={() => onOpenBoard(task.board_id)}>
+            {dueSoon.length ? (
+              dueSoon.map((task) => (
+                <button key={task.id} type="button" className={cls("activity-row", `activity-row--${tone(visualStatus(task))}`)} onClick={() => onOpenBoard(task.board_id)}>
                   <div>
                     <strong>{task.name}</strong>
                     <small>
-                      {task.board_name} • {formatDate(task.due_date)}
+                      {task.board_name} - {formatDate(task.due_date)}
                     </small>
                   </div>
-                  <span className={cls("pill", `pill--${tone(task.priority)}`)}>{task.priority}</span>
+                  <div className="activity-row__meta">
+                    <span className={cls("pill", `pill--${tone(task.priority)}`)}>{task.priority}</span>
+                    <span className={cls("pill", `pill--${tone(visualStatus(task))}`)}>{visualStatus(task)}</span>
+                  </div>
                 </button>
               ))
             ) : (
-              <div className="empty-state">No due-soon tasks are assigned to you.</div>
+              <div className="empty-state">Nothing is due soon for you right now.</div>
             )}
           </div>
         </section>
@@ -245,8 +308,8 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
         <section className="panel">
           <div className="panel__head">
             <div>
-              <span className="eyebrow">Pinned notes</span>
-              <h3>Keep this simple</h3>
+              <span className="eyebrow">Pinned</span>
+              <h3>Keep the board clean</h3>
             </div>
           </div>
           <div className="notice-stack">
@@ -279,7 +342,13 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
           {boards.map((board) => {
             const progress = boardProgress(board);
             return (
-              <button key={board.id} type="button" className="project-card" onClick={() => onOpenBoard(board.id)}>
+              <button
+                key={board.id}
+                type="button"
+                className="project-card"
+                style={{ "--project-accent": board.color || "#3156f5" }}
+                onClick={() => onOpenBoard(board.id)}
+              >
                 <div className="project-card__top">
                   <span className={cls("project-chip", `project-chip--${tone(board.department)}`)}>{board.department}</span>
                 </div>
@@ -324,8 +393,10 @@ function TaskRow({ task, board, users, onUpdateTask }) {
     });
   }
 
+  const rowStatus = visualStatus(task);
+
   return (
-    <tr>
+    <tr className={cls("task-row", `task-row--${tone(rowStatus)}`)}>
       <td>
         <input className="cell-input cell-input--task" defaultValue={task.name} onBlur={(event) => saveField("name", event.target.value.trim())} />
       </td>
@@ -339,7 +410,7 @@ function TaskRow({ task, board, users, onUpdateTask }) {
         </select>
       </td>
       <td>
-        <select className={cls("cell-select", `cell-select--${tone(task.status)}`)} value={task.status} onChange={(event) => saveField("status", event.target.value)}>
+        <select className={cls("cell-select", `cell-select--${tone(rowStatus)}`)} value={task.status} onChange={(event) => saveField("status", event.target.value)}>
           {STATUS_OPTIONS.map((option) => (
             <option key={option} value={option}>
               {option}
@@ -367,7 +438,7 @@ function TaskRow({ task, board, users, onUpdateTask }) {
         const value = task.custom_fields?.[String(field.id)] ?? "";
         const inputType = field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
         return (
-          <td key={`${task.id}-field-${field.id}`}>
+          <td key={`${task.id}-column-${field.id}`}>
             <input
               className={cls("cell-input", field.type === "tag" && value ? "cell-input--tagged" : "")}
               type={inputType}
@@ -381,22 +452,32 @@ function TaskRow({ task, board, users, onUpdateTask }) {
   );
 }
 
-function ProjectBoard({ board, currentUser, users, onUpdateTask, onCreateTask, onCreateGroup, onCreateField }) {
+function ProjectBoard({
+  board,
+  currentUser,
+  users,
+  onUpdateTask,
+  onCreateTask,
+  onCreateGroup,
+  onUpdateGroup,
+  onCreateField,
+  onUpdateBoard,
+}) {
   const [search, setSearch] = useState("");
   const [mineOnly, setMineOnly] = useState(false);
   const [quickTasks, setQuickTasks] = useState({});
-  const [groupName, setGroupName] = useState("");
-  const [showFieldForm, setShowFieldForm] = useState(false);
-  const [fieldDraft, setFieldDraft] = useState({ name: "", type: "text" });
+  const [groupDraft, setGroupDraft] = useState({ name: "", color: "#3156f5" });
+  const [showColumnForm, setShowColumnForm] = useState(false);
+  const [columnDraft, setColumnDraft] = useState({ name: "", type: "text" });
 
   useEffect(() => {
     setSearch("");
     setMineOnly(false);
     setQuickTasks({});
-    setGroupName("");
-    setShowFieldForm(false);
-    setFieldDraft({ name: "", type: "text" });
-  }, [board.id]);
+    setGroupDraft({ name: "", color: board.color || "#3156f5" });
+    setShowColumnForm(false);
+    setColumnDraft({ name: "", type: "text" });
+  }, [board.id, board.color]);
 
   function visibleTasksForGroup(groupId) {
     return sortTasks(
@@ -420,21 +501,29 @@ function ProjectBoard({ board, currentUser, users, onUpdateTask, onCreateTask, o
     setQuickTasks((current) => ({ ...current, [groupId]: "" }));
   }
 
-  function submitField(event) {
+  function submitColumn(event) {
     event.preventDefault();
-    const name = fieldDraft.name.trim();
+    const name = columnDraft.name.trim();
     if (!name) return;
-    onCreateField({ ...fieldDraft, name });
-    setFieldDraft({ name: "", type: "text" });
-    setShowFieldForm(false);
+    onCreateField({ ...columnDraft, name });
+    setColumnDraft({ name: "", type: "text" });
+    setShowColumnForm(false);
   }
 
   function submitGroup(event) {
     event.preventDefault();
-    const name = groupName.trim();
+    const name = groupDraft.name.trim();
     if (!name) return;
-    onCreateGroup(name);
-    setGroupName("");
+    onCreateGroup(name, groupDraft.color);
+    setGroupDraft((current) => ({ ...current, name: "" }));
+  }
+
+  if (!board) {
+    return (
+      <section className="panel">
+        <div className="empty-state">Create a project to start building task groups.</div>
+      </section>
+    );
   }
 
   return (
@@ -443,36 +532,44 @@ function ProjectBoard({ board, currentUser, users, onUpdateTask, onCreateTask, o
         <div>
           <span className="eyebrow">{board.department}</span>
           <h2>{board.name}</h2>
-          <p>{board.description || "Simple board for groups, tasks, priorities, due dates, and notes."}</p>
+          <p>{board.description || "Simple board for task groups, due dates, notes, and priority."}</p>
         </div>
+
         <div className="board-hero__controls">
           <input className="search" placeholder="Search tasks or notes" value={search} onChange={(event) => setSearch(event.target.value)} />
+
           <button type="button" className={cls("toggle-chip", mineOnly && "is-active")} onClick={() => setMineOnly((current) => !current)}>
             {mineOnly ? "Only mine" : "All tasks"}
           </button>
-          <button type="button" className="plus-button" onClick={() => setShowFieldForm((current) => !current)}>
-            + Add Field
+
+          <label className="color-control">
+            <span>Board color</span>
+            <input type="color" value={board.color || "#3156f5"} onChange={(event) => onUpdateBoard({ color: event.target.value })} />
+          </label>
+
+          <button type="button" className="plus-button" onClick={() => setShowColumnForm((current) => !current)}>
+            {showColumnForm ? "Close columns" : "+ Add Column"}
           </button>
         </div>
       </section>
 
-      {showFieldForm ? (
-        <form className="panel inline-form" onSubmit={submitField}>
+      {showColumnForm ? (
+        <form className="panel inline-form" onSubmit={submitColumn}>
           <label>
-            <span>Field name</span>
-            <input value={fieldDraft.name} onChange={(event) => setFieldDraft((current) => ({ ...current, name: event.target.value }))} />
+            <span>Column name</span>
+            <input value={columnDraft.name} onChange={(event) => setColumnDraft((current) => ({ ...current, name: event.target.value }))} />
           </label>
           <label>
             <span>Type</span>
-            <select value={fieldDraft.type} onChange={(event) => setFieldDraft((current) => ({ ...current, type: event.target.value }))}>
-              {FIELD_TYPE_OPTIONS.map((option) => (
+            <select value={columnDraft.type} onChange={(event) => setColumnDraft((current) => ({ ...current, type: event.target.value }))}>
+              {COLUMN_TYPE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
             </select>
           </label>
-          <button type="submit">Add field</button>
+          <button type="submit">Add column</button>
         </form>
       ) : null}
 
@@ -480,13 +577,27 @@ function ProjectBoard({ board, currentUser, users, onUpdateTask, onCreateTask, o
         {board.groups.map((group) => {
           const tasks = visibleTasksForGroup(group.id);
           return (
-            <section key={group.id} className="group-card">
+            <section key={group.id} className="group-card" style={{ "--group-accent": group.color || board.color || "#3156f5" }}>
               <div className="group-card__head">
-                <div>
-                  <h3>{group.name}</h3>
+                <div className="group-card__meta">
+                  <input
+                    className="group-name-input"
+                    defaultValue={group.name}
+                    aria-label="Task group name"
+                    onBlur={(event) => {
+                      const nextName = event.target.value.trim();
+                      if (nextName && nextName !== group.name) onUpdateGroup(group.id, { name: nextName });
+                    }}
+                  />
                   <small>{tasks.length} tasks</small>
                 </div>
+
+                <label className="color-control color-control--inline">
+                  <span>Task group color</span>
+                  <input type="color" value={group.color || board.color || "#3156f5"} onChange={(event) => onUpdateGroup(group.id, { color: event.target.value })} />
+                </label>
               </div>
+
               <div className="board-table-wrap">
                 <table className="board-table">
                   <thead>
@@ -498,7 +609,7 @@ function ProjectBoard({ board, currentUser, users, onUpdateTask, onCreateTask, o
                       <th>Owner</th>
                       <th>Notes</th>
                       {board.fields.map((field) => (
-                        <th key={`field-head-${field.id}`}>{field.name}</th>
+                        <th key={`column-head-${field.id}`}>{field.name}</th>
                       ))}
                     </tr>
                   </thead>
@@ -535,39 +646,107 @@ function ProjectBoard({ board, currentUser, users, onUpdateTask, onCreateTask, o
 
       <form className="panel inline-form inline-form--group" onSubmit={submitGroup}>
         <label>
-          <span>New group</span>
-          <input placeholder="This Week" value={groupName} onChange={(event) => setGroupName(event.target.value)} />
+          <span>New task group</span>
+          <input placeholder="This week" value={groupDraft.name} onChange={(event) => setGroupDraft((current) => ({ ...current, name: event.target.value }))} />
         </label>
-        <button type="submit">+ Add Group</button>
+        <label className="color-control color-control--create">
+          <span>Color</span>
+          <input type="color" value={groupDraft.color} onChange={(event) => setGroupDraft((current) => ({ ...current, color: event.target.value }))} />
+        </label>
+        <button type="submit">+ Add Task Group</button>
       </form>
     </div>
   );
 }
 
-function AdminView({ data, currentUser, newUserForm, setNewUserForm, onCreateUser, onDeleteUser, busy }) {
+function AdminView({ data, currentUser, onCreateUser, onUpdateUser, onDeleteUser, onImpersonateUser, busy }) {
+  const [drafts, setDrafts] = useState({});
+  const [newUserForm, setNewUserForm] = useState(blankUser());
+
+  useEffect(() => {
+    setDrafts(
+      Object.fromEntries(
+        data.users.map((user) => [
+          user.id,
+          {
+            name: user.name || "",
+            title: user.title || "",
+            role: user.role || "Staff",
+            department: user.department || "General",
+            password: "",
+            active: user.active !== false,
+          },
+        ])
+      )
+    );
+  }, [data.users]);
+
+  function setDraft(userId, patch) {
+    setDrafts((current) => ({
+      ...current,
+      [userId]: {
+        ...(current[userId] || {}),
+        ...patch,
+      },
+    }));
+  }
+
+  async function submitNewUser(event) {
+    event.preventDefault();
+    const name = newUserForm.name.trim();
+    const password = newUserForm.password.trim();
+    if (!name || !password) return;
+    const created = await onCreateUser({
+      ...newUserForm,
+      name,
+      password,
+      store_id: null,
+    });
+    if (created) setNewUserForm(blankUser());
+  }
+
+  async function saveUser(user) {
+    const draft = drafts[user.id];
+    if (!draft) return;
+    const changes = {};
+
+    ["name", "title", "role", "department"].forEach((field) => {
+      if (String(draft[field] || "") !== String(user[field] || "")) changes[field] = draft[field];
+    });
+
+    if (draft.active !== (user.active !== false)) changes.active = draft.active;
+    if (draft.password.trim()) changes.password = draft.password.trim();
+
+    if (!Object.keys(changes).length) return;
+
+    const updated = await onUpdateUser(user.id, changes);
+    if (updated) setDraft(user.id, { password: "" });
+  }
+
   return (
     <div className="settings-view">
       <section className="panel help-panel">
         <div className="panel__head">
           <div>
             <span className="eyebrow">Admin</span>
-            <h3>People management</h3>
+            <h3>User management</h3>
           </div>
         </div>
         <div className="manifest-copy">
-          <p>This area is for adding and removing people from the workspace without making the rest of the UI feel heavy.</p>
-          <p>Use the admin account to manage who can access the workspace.</p>
+          <p>Add people, update passwords, disable logins, and preview exactly what a user sees without leaving the workspace.</p>
+          <p>Preview mode changes only your session. The user account itself is not altered when you switch into it.</p>
         </div>
       </section>
 
       <div className="dashboard-grid dashboard-grid--admin">
-        <form className="panel" onSubmit={onCreateUser}>
+        <form className="panel" onSubmit={submitNewUser}>
           <div className="panel__head">
             <div>
-              <span className="eyebrow">Users</span>
-              <h3>Add user</h3>
+              <span className="eyebrow">Add user</span>
+              <h3>New login</h3>
             </div>
           </div>
+
           <div className="form-grid">
             <label>
               <span>Name</span>
@@ -599,9 +778,15 @@ function AdminView({ data, currentUser, newUserForm, setNewUserForm, onCreateUse
             </label>
             <label className="full-span">
               <span>Password</span>
-              <input type="password" value={newUserForm.password} onChange={(event) => setNewUserForm((current) => ({ ...current, password: event.target.value }))} />
+              <input
+                type="text"
+                placeholder="Set a unique password"
+                value={newUserForm.password}
+                onChange={(event) => setNewUserForm((current) => ({ ...current, password: event.target.value }))}
+              />
             </label>
           </div>
+
           <button type="submit" disabled={busy === "create-user"}>
             {busy === "create-user" ? "Adding..." : "Add User"}
           </button>
@@ -610,30 +795,99 @@ function AdminView({ data, currentUser, newUserForm, setNewUserForm, onCreateUse
         <section className="panel">
           <div className="panel__head">
             <div>
-              <span className="eyebrow">Current users</span>
-              <h3>Workspace roster</h3>
+              <span className="eyebrow">Workspace roster</span>
+              <h3>Edit users</h3>
             </div>
           </div>
-          <div className="roster-list">
-            {data.users.map((user) => (
-              <div key={user.id} className="roster-card">
-                <div className="roster-card__left">
-                  <span className="avatar">{user.avatar || initials(user.name)}</span>
-                  <div>
-                    <strong>{user.name}</strong>
-                    <small>
-                      {user.title || "No title"} • {user.department}
-                    </small>
+
+          <div className="roster-list roster-list--editor">
+            {data.users.map((user) => {
+              const draft = drafts[user.id] || {};
+              return (
+                <div key={user.id} className="roster-editor">
+                  <div className="roster-editor__head">
+                    <div className="roster-card__left">
+                      <span className="avatar">{user.avatar || initials(user.name)}</span>
+                      <div>
+                        <strong>{user.name}</strong>
+                        <small>
+                          {user.title || "No title"} - {user.department}
+                        </small>
+                      </div>
+                    </div>
+
+                    <div className="roster-card__right">
+                      <span className={cls("pill", `pill--${tone(user.role)}`)}>{user.role}</span>
+                      {Number(user.id) === Number(currentUser.id) ? <span className="pill pill--current">Current</span> : null}
+                    </div>
+                  </div>
+
+                  <div className="form-grid">
+                    <label>
+                      <span>Name</span>
+                      <input value={draft.name || ""} onChange={(event) => setDraft(user.id, { name: event.target.value })} />
+                    </label>
+                    <label>
+                      <span>Title</span>
+                      <input value={draft.title || ""} onChange={(event) => setDraft(user.id, { title: event.target.value })} />
+                    </label>
+                    <label>
+                      <span>Role</span>
+                      <select value={draft.role || "Staff"} onChange={(event) => setDraft(user.id, { role: event.target.value })}>
+                        {ROLE_OPTIONS.map((role) => (
+                          <option key={role} value={role}>
+                            {role}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Department</span>
+                      <select value={draft.department || "General"} onChange={(event) => setDraft(user.id, { department: event.target.value })}>
+                        {DEPARTMENT_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Login access</span>
+                      <select value={draft.active ? "active" : "inactive"} onChange={(event) => setDraft(user.id, { active: event.target.value === "active" })}>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>New password</span>
+                      <input
+                        type="text"
+                        placeholder="Leave blank to keep current password"
+                        value={draft.password || ""}
+                        onChange={(event) => setDraft(user.id, { password: event.target.value })}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="roster-actions">
+                    <button type="button" className="ghost-button" onClick={() => onImpersonateUser(user.id)} disabled={Number(user.id) === Number(currentUser.id)}>
+                      View as user
+                    </button>
+                    <button type="button" className="ghost-button" onClick={() => saveUser(user)} disabled={busy === `save-user-${user.id}`}>
+                      {busy === `save-user-${user.id}` ? "Saving..." : "Save changes"}
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button ghost-button--danger"
+                      onClick={() => onDeleteUser(user.id)}
+                      disabled={Number(user.id) === Number(currentUser.id) || busy === `delete-user-${user.id}`}
+                    >
+                      {busy === `delete-user-${user.id}` ? "Removing..." : "Remove"}
+                    </button>
                   </div>
                 </div>
-                <div className="roster-card__right">
-                  <span className={cls("pill", `pill--${tone(user.role)}`)}>{user.role}</span>
-                  <button type="button" className="ghost-button ghost-button--danger" onClick={() => onDeleteUser(user.id)} disabled={Number(user.id) === Number(currentUser.id)}>
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       </div>
@@ -650,6 +904,7 @@ export default function App() {
     boards: [],
   });
   const [session, setSession] = useState(() => loadSession());
+  const [theme, setTheme] = useState(() => loadTheme());
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -659,7 +914,6 @@ export default function App() {
   const [loginUserId, setLoginUserId] = useState("");
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [projectForm, setProjectForm] = useState(blankProject(null));
-  const [newUserForm, setNewUserForm] = useState(blankUser());
 
   async function load() {
     setLoading(true);
@@ -674,9 +928,7 @@ export default function App() {
         return;
       } catch (loadError) {
         lastError = loadError;
-        if (attempt < 2) {
-          await new Promise((resolve) => setTimeout(resolve, 1200));
-        }
+        if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 1200));
       }
     }
     try {
@@ -692,16 +944,29 @@ export default function App() {
     load();
   }, []);
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    saveTheme(theme);
+  }, [theme]);
+
   const currentUser = useMemo(
     () => data.users.find((user) => Number(user.id) === Number(session?.user_id)) || null,
     [data.users, session?.user_id]
   );
-  const activeUsers = useMemo(() => data.users.filter((user) => user.active !== false), [data.users]);
+
+  const adminSourceUser = useMemo(
+    () => data.users.find((user) => Number(user.id) === Number(session?.admin_user_id)) || null,
+    [data.users, session?.admin_user_id]
+  );
+
   const visibleBoards = useMemo(() => relevantBoards(data.boards, currentUser), [data.boards, currentUser]);
   const activeBoard = useMemo(
     () => visibleBoards.find((board) => Number(board.id) === Number(selectedBoardId)) || visibleBoards[0] || null,
     [visibleBoards, selectedBoardId]
   );
+
+  const isPreviewing = Boolean(adminSourceUser && Number(adminSourceUser.id) !== Number(currentUser?.id));
+  const isAdmin = currentUser?.role === "Admin";
 
   useEffect(() => {
     if (!currentUser && session) {
@@ -711,15 +976,24 @@ export default function App() {
   }, [currentUser?.id, session]);
 
   useEffect(() => {
+    if (session?.admin_user_id && !adminSourceUser) {
+      const nextSession = { user_id: session.user_id };
+      saveSession(nextSession);
+      setSession(nextSession);
+    }
+  }, [adminSourceUser?.id, session]);
+
+  useEffect(() => {
     if (!activeBoard && visibleBoards.length) setSelectedBoardId(visibleBoards[0].id);
   }, [visibleBoards.length, activeBoard?.id]);
 
   useEffect(() => {
-    if (currentUser) {
-      setProjectForm(blankProject(currentUser));
-      setNewUserForm(blankUser());
-    }
+    if (currentUser) setProjectForm(blankProject(currentUser));
   }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (!isAdmin && page === "admin") setPage("dashboard");
+  }, [isAdmin, page]);
 
   async function handleLogin(event) {
     event.preventDefault();
@@ -744,6 +1018,26 @@ export default function App() {
     setSession(null);
     setPage("dashboard");
     setLoginPassword("");
+  }
+
+  function toggleTheme() {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
+  }
+
+  function beginPreview(userId) {
+    if (!currentUser || currentUser.role !== "Admin") return;
+    const nextSession = { user_id: Number(userId), admin_user_id: Number(currentUser.id) };
+    saveSession(nextSession);
+    setSession(nextSession);
+    setPage("dashboard");
+  }
+
+  function endPreview() {
+    if (!adminSourceUser) return;
+    const nextSession = { user_id: adminSourceUser.id };
+    saveSession(nextSession);
+    setSession(nextSession);
+    setPage("admin");
   }
 
   function mutateBoard(boardId, updater) {
@@ -777,15 +1071,46 @@ export default function App() {
     }
   }
 
-  async function handleCreateGroup(name) {
+  async function handleUpdateBoard(changes) {
+    if (!activeBoard) return;
+    setBusy("save-board");
+    setError("");
+    try {
+      const updated = await updateBoard(activeBoard.id, changes);
+      mutateBoard(activeBoard.id, (board) => ({ ...board, ...updated }));
+    } catch (submitError) {
+      setError(submitError.message || "Unable to update project");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function handleCreateGroup(name, color) {
     if (!activeBoard) return;
     setBusy("create-group");
     setError("");
     try {
-      const group = await createGroup({ board_id: activeBoard.id, name });
+      const group = await createGroup({ board_id: activeBoard.id, name, color });
       mutateBoard(activeBoard.id, (board) => ({ ...board, groups: [...board.groups, group] }));
     } catch (submitError) {
-      setError(submitError.message || "Unable to create group");
+      setError(submitError.message || "Unable to create task group");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function handleUpdateGroup(groupId, changes) {
+    if (!activeBoard) return;
+    setBusy(`save-group-${groupId}`);
+    setError("");
+    try {
+      const updated = await updateGroup(activeBoard.id, groupId, changes);
+      mutateBoard(activeBoard.id, (board) => ({
+        ...board,
+        groups: board.groups.map((group) => (Number(group.id) === Number(groupId) ? { ...group, ...updated } : group)),
+      }));
+    } catch (submitError) {
+      setError(submitError.message || "Unable to update task group");
     } finally {
       setBusy("");
     }
@@ -793,13 +1118,13 @@ export default function App() {
 
   async function handleCreateField(draft) {
     if (!activeBoard) return;
-    setBusy("create-field");
+    setBusy("create-column");
     setError("");
     try {
       const field = await createBoardField(activeBoard.id, draft);
       mutateBoard(activeBoard.id, (board) => ({ ...board, fields: [...board.fields, field] }));
     } catch (submitError) {
-      setError(submitError.message || "Unable to create field");
+      setError(submitError.message || "Unable to create column");
     } finally {
       setBusy("");
     }
@@ -814,7 +1139,7 @@ export default function App() {
         board_id: activeBoard.id,
         group_id: groupId,
         name,
-        status: "Not started",
+        status: "Pending",
         priority: "Medium",
         owner_id: currentUser.id,
         store_id: null,
@@ -849,24 +1174,34 @@ export default function App() {
     }
   }
 
-  async function handleCreateUser(event) {
-    event.preventDefault();
-    const name = newUserForm.name.trim();
-    const password = newUserForm.password.trim();
-    if (!name || !password) return;
+  async function handleCreateUser(payload) {
     setBusy("create-user");
     setError("");
     try {
-      const user = await createUser({
-        ...newUserForm,
-        name,
-        password,
-        store_id: null,
-      });
+      const user = await createUser(payload);
       setData((current) => ({ ...current, users: [...current.users, user] }));
-      setNewUserForm(blankUser());
+      return true;
     } catch (submitError) {
       setError(submitError.message || "Unable to create user");
+      return false;
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function handleSaveUser(userId, changes) {
+    setBusy(`save-user-${userId}`);
+    setError("");
+    try {
+      const user = await updateUser(userId, changes);
+      setData((current) => ({
+        ...current,
+        users: current.users.map((entry) => (Number(entry.id) === Number(userId) ? { ...entry, ...user } : entry)),
+      }));
+      return true;
+    } catch (submitError) {
+      setError(submitError.message || "Unable to update user");
+      return false;
     } finally {
       setBusy("");
     }
@@ -885,7 +1220,7 @@ export default function App() {
           tasks: board.tasks.map((task) => (Number(task.owner_id) === Number(userId) ? { ...task, owner_id: null } : task)),
         })),
       }));
-      if (Number(currentUser?.id) === Number(userId)) handleLogout();
+      if (Number(currentUser?.id) === Number(userId) || Number(adminSourceUser?.id) === Number(userId)) handleLogout();
     } catch (submitError) {
       setError(submitError.message || "Unable to remove user");
     } finally {
@@ -908,19 +1243,19 @@ export default function App() {
         onSubmit={handleLogin}
         error={error}
         busy={busy === "login"}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     );
   }
 
-  const isAdmin = currentUser.role === "Admin";
-  const pageTitle =
-    page === "dashboard" ? "My Dashboard" : page === "project" ? activeBoard?.name || "Projects" : "Admin";
+  const pageTitle = page === "dashboard" ? "Dashboard" : page === "project" ? activeBoard?.name || "Projects" : "Admin";
   const pageCopy =
     page === "dashboard"
-      ? "Your projects, due dates, and priorities in one place."
+      ? "Projects, priorities, due dates, and notes in one place."
       : page === "project"
-        ? "Keep groups simple and update the board directly."
-        : "Add and remove people without touching the rest of the workspace.";
+        ? "Edit the board directly, color the task groups, and let the status bar do the scanning for you."
+        : "Manage users, passwords, access, and preview mode.";
 
   return (
     <div className="workspace-shell">
@@ -929,7 +1264,7 @@ export default function App() {
           <img className="brand-mark" src={LOGO_SRC} alt="Organization Tool logo" />
           <div>
             <span className="eyebrow">Organization Tool</span>
-            <h1>Simple workboards</h1>
+            <h1>Dealer workflow</h1>
           </div>
         </div>
 
@@ -962,6 +1297,7 @@ export default function App() {
               +
             </button>
           </div>
+
           <div className="project-list">
             {visibleBoards.map((board) => (
               <button
@@ -1006,7 +1342,7 @@ export default function App() {
                 ))}
               </select>
             </label>
-            <label>
+            <label className="color-control color-control--create">
               <span>Color</span>
               <input type="color" value={projectForm.color} onChange={(event) => setProjectForm((current) => ({ ...current, color: event.target.value }))} />
             </label>
@@ -1028,10 +1364,27 @@ export default function App() {
             <h2>{pageTitle}</h2>
             <p>{pageCopy}</p>
           </div>
+
           <div className="topbar__meta">
+            {isPreviewing ? (
+              <button type="button" className="ghost-button" onClick={endPreview}>
+                Return to Admin
+              </button>
+            ) : null}
+            <ThemeToggle theme={theme} onToggle={toggleTheme} compact />
             <span className={cls("pill", `pill--${tone(currentUser.department)}`)}>{currentUser.department}</span>
           </div>
         </header>
+
+        {isPreviewing ? (
+          <section className="panel preview-banner">
+            <div>
+              <span className="eyebrow">Preview mode</span>
+              <h3>{currentUser.name}'s view</h3>
+            </div>
+            <p>You are viewing the workspace as this user. Use Return to Admin when you want your admin tools back.</p>
+          </section>
+        ) : null}
 
         {error ? <div className="error-banner">{error}</div> : null}
 
@@ -1047,15 +1400,17 @@ export default function App() {
           />
         ) : null}
 
-        {page === "project" && activeBoard ? (
+        {page === "project" ? (
           <ProjectBoard
             board={activeBoard}
             currentUser={currentUser}
-            users={activeUsers}
+            users={data.users.filter((user) => user.active !== false)}
             onUpdateTask={handleUpdateTask}
             onCreateTask={handleCreateTask}
             onCreateGroup={handleCreateGroup}
+            onUpdateGroup={handleUpdateGroup}
             onCreateField={handleCreateField}
+            onUpdateBoard={handleUpdateBoard}
           />
         ) : null}
 
@@ -1063,10 +1418,10 @@ export default function App() {
           <AdminView
             data={data}
             currentUser={currentUser}
-            newUserForm={newUserForm}
-            setNewUserForm={setNewUserForm}
             onCreateUser={handleCreateUser}
+            onUpdateUser={handleSaveUser}
             onDeleteUser={handleDeleteUser}
+            onImpersonateUser={beginPreview}
             busy={busy}
           />
         ) : null}
