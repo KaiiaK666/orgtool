@@ -75,8 +75,10 @@ app.bertogden123.com
 
 This repo includes a Render blueprint that creates:
 
-- a FastAPI web service with a persistent disk
 - a static frontend site with SPA rewrites
+- no separate backend service
+
+The frontend talks to the existing `dealership-tool-api` service under the `/orgtool` namespace so the app stays separate without creating a second paid API.
 
 Use `organize.bertogden123.com` as the frontend custom domain.
 
@@ -84,12 +86,6 @@ The simplest production setup is:
 
 1. Push this folder to GitHub.
 2. In Render, create a new Blueprint from this repo.
-3. Set `DEALER_CORS_ORIGINS` to `https://organize.bertogden123.com`.
-4. After the services are live, attach `organize.bertogden123.com` to the frontend static site in Render.
+3. Deploy the existing `dealership-tool-api` service with the mounted `/orgtool` API.
+4. After the static site is live, attach `organize.bertogden123.com` to it in Render.
 5. In IONOS DNS, create the `CNAME` record Render gives you for `organize`.
-
-The backend data file is configured to persist at:
-
-```text
-/var/data/store.json
-```

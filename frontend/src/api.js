@@ -1,6 +1,9 @@
-const DEFAULT_API_BASE = "http://localhost:8124";
+const DEFAULT_API_HOST = "http://localhost:8124";
 
-export const apiBase = (import.meta.env.VITE_API_BASE || DEFAULT_API_BASE).replace(/\/$/, "");
+const apiHost = (import.meta.env.VITE_API_HOST || import.meta.env.VITE_API_BASE || DEFAULT_API_HOST).replace(/\/$/, "");
+const apiNamespace = (import.meta.env.VITE_API_NAMESPACE || "").replace(/\/$/, "");
+
+export const apiBase = `${apiHost}${apiNamespace}`;
 
 async function request(path, options = {}) {
   const response = await fetch(`${apiBase}${path}`, {

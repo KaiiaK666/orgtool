@@ -123,9 +123,10 @@ Reason:
 2. Replace local JSON storage with a real database.
 3. Add persistent user auth.
 4. Add backups and audit logging.
-5. Deploy frontend and backend behind the production domain.
-6. Point `organize.bertogden123.com` to the deployed frontend.
-7. Restrict backend CORS to the production host.
+5. Deploy the frontend on its own subdomain.
+6. Reuse the existing dealership backend for the API under its own namespace.
+7. Point `organize.bertogden123.com` to the deployed frontend.
+8. Restrict backend CORS to the production host.
 
 ## Current state
 
