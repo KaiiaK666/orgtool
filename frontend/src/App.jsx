@@ -599,7 +599,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
       </section>
 
       <div className="dashboard-grid">
-        <section className="panel">
+        <section className="panel panel--dashboard">
           <div className="panel__head">
             <div>
               <span className="eyebrow">My work</span>
@@ -628,7 +628,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
           </div>
         </section>
 
-        <section className="panel">
+        <section className="panel panel--dashboard">
           <div className="panel__head">
             <div>
               <span className="eyebrow">Pinned</span>
@@ -654,23 +654,26 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
         </section>
       </div>
 
-      <section className="panel">
+      <section className="panel panel--dashboard panel--projects">
         <div className="panel__head">
           <div>
             <span className="eyebrow">Projects</span>
             <h3>Your boards</h3>
           </div>
         </div>
-        <div className="project-grid">
+        <div className="project-grid project-grid--dashboard">
           {boards.map((board) => {
             const progress = boardProgress(board);
             const toneName = tone(boardTone(board));
             const groups = boardGroupSummary(board);
+            const visibleGroups = groups.slice(0, 3);
+            const hiddenGroupCount = Math.max(groups.length - visibleGroups.length, 0);
+            const totalTasks = board.tasks?.length || 0;
             return (
               <button
                 key={board.id}
                 type="button"
-                className={cls("project-card", `project-card--${toneName}`)}
+                className={cls("project-card", "project-card--dashboard", `project-card--${toneName}`)}
                 style={{ "--project-accent": board.color || "#3156f5" }}
                 onClick={() => onOpenBoard(board.id)}
               >
@@ -683,10 +686,11 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
                 <div className="project-hierarchy">
                   <div className="project-hierarchy__head">
                     <small>{groups.length} task groups</small>
+                    <small>{totalTasks} tasks</small>
                   </div>
                   <div className="project-hierarchy__list">
-                    {groups.length ? (
-                      groups.map((group) => (
+                    {visibleGroups.length ? (
+                      visibleGroups.map((group) => (
                         <div key={group.id} className={cls("project-group-row", `project-group-row--${tone(group.status)}`)}>
                           <span className="project-group-row__name">
                             <i style={{ "--group-dot": group.color }} />
@@ -700,16 +704,23 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
                         <span className="project-group-row__name">No task groups yet</span>
                       </div>
                     )}
+                    {hiddenGroupCount ? (
+                      <div className="project-group-row project-group-row--more">
+                        <span className="project-group-row__name">+{hiddenGroupCount} more groups</span>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
-                <div className="progress-row">
-                  <small>
-                    {groups.length} groups
-                  </small>
-                  <small>{progress.percent}%</small>
-                </div>
-                <div className="progress-bar">
-                  <span style={{ width: `${progress.percent}%`, background: board.color }} />
+                <div className="project-card__footer">
+                  <div className="progress-row">
+                    <small>
+                      {progress.done}/{progress.total} done
+                    </small>
+                    <small>{progress.percent}%</small>
+                  </div>
+                  <div className="progress-bar">
+                    <span style={{ width: `${progress.percent}%`, background: board.color }} />
+                  </div>
                 </div>
               </button>
             );

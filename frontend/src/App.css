@@ -1001,6 +1001,24 @@ a {
   gap: 14px;
 }
 
+.dashboard-view {
+  gap: 14px;
+}
+
+.panel--dashboard {
+  gap: 14px;
+  padding: 18px;
+  border-radius: 22px;
+}
+
+.panel--dashboard .panel__head {
+  gap: 10px;
+}
+
+.panel--dashboard .panel__head h3 {
+  font-size: 1.35rem;
+}
+
 .stat-card,
 .panel,
 .group-card,
@@ -1039,6 +1057,20 @@ a {
   gap: 18px;
 }
 
+.dashboard-grid {
+  align-items: start;
+}
+
+.panel--projects {
+  gap: 14px;
+}
+
+.project-grid--dashboard {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
 .dashboard-grid--admin {
   align-items: start;
 }
@@ -1059,6 +1091,13 @@ a {
   background: var(--surface);
   color: var(--text);
   border-width: 1px;
+}
+
+.project-card--dashboard {
+  min-height: 0;
+  gap: 12px;
+  padding: 16px;
+  align-content: start;
 }
 
 .project-card::before {
@@ -1087,11 +1126,19 @@ a {
   color: var(--muted) !important;
 }
 
+.project-card--dashboard p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.5;
+}
+
 .project-hierarchy {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .project-hierarchy__head {
@@ -1110,7 +1157,7 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 9px 11px;
   border-radius: 14px;
   border: 1px solid var(--line);
   background: var(--surface-muted);
@@ -1161,6 +1208,18 @@ a {
 
 .project-group-row--empty {
   justify-content: flex-start;
+}
+
+.project-group-row--more {
+  justify-content: flex-start;
+  border-style: dashed;
+  background: transparent;
+}
+
+.project-card__footer {
+  display: grid;
+  gap: 8px;
+  margin-top: auto;
 }
 
 .project-card--overdue {
@@ -1277,6 +1336,15 @@ a {
 .activity-row {
   border-radius: 18px;
   gap: 18px;
+}
+
+.activity-list,
+.notice-stack {
+  gap: 10px;
+}
+
+.notice-card {
+  gap: 10px;
 }
 
 .activity-row__meta {
@@ -2029,6 +2097,11 @@ a {
     border-radius: 20px;
   }
 
+  .panel--dashboard {
+    gap: 12px;
+    padding: 16px;
+  }
+
   .stat-card strong {
     font-size: 1.7rem;
   }
@@ -2130,6 +2203,10 @@ a {
 
   .project-group-row__meta {
     white-space: normal;
+  }
+
+  .project-grid--dashboard {
+    grid-template-columns: 1fr;
   }
 
   .group-card__head,
