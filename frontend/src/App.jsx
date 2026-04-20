@@ -22,8 +22,9 @@ const MOBILE_LAYOUT_QUERY = "(max-width: 900px)";
 const STATUS_OPTIONS = ["Overdue", "Pending", "Done"];
 const PRIORITY_OPTIONS = ["Critical", "High", "Medium", "Low"];
 const ROLE_OPTIONS = ["Admin", "Manager", "Coordinator", "Staff"];
+const MAX_NOTE_SCREENSHOTS = 8;
 const COLUMN_TYPE_OPTIONS = [
-  { value: "text", label: "Open text", hint: "Flexible text for names, references, links, or freeform details." },
+  { value: "text", label: "Open", hint: "Flexible text for names, references, links, or freeform details." },
   { value: "date", label: "Date", hint: "Calendar dates for deadlines, appointments, and follow-up targets." },
   { value: "number", label: "Number", hint: "Counts, amounts, goals, and any numeric value you want to sort fast." },
   { value: "tag", label: "Tag", hint: "Short labels like rooftop, campaign, lane, or source." },
@@ -773,7 +774,9 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
 function TaskNotesField({ task, onUpdateTask, compact = false }) {
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
+  const [isDragActive, setIsDragActive] = useState(false);
   const screenshots = Array.isArray(task.screenshots) ? task.screenshots : [];
+  const remainingSlots = Math.max(0, MAX_NOTE_SCREENSHOTS - screenshots.length);
 
   function saveNotes(nextValue) {
     if (String(task.notes || "") === String(nextValue || "")) return;
@@ -782,12 +785,12 @@ function TaskNotesField({ task, onUpdateTask, compact = false }) {
 
   async function addScreenshots(fileList) {
     const imageFiles = Array.from(fileList || []).filter((file) => file.type.startsWith("image/"));
-    if (!imageFiles.length) return;
+    if (!imageFiles.length || !remainingSlots) return;
     setUploading(true);
     try {
-      const nextImages = await Promise.all(imageFiles.slice(0, 4).map((file) => imageToStoredDataUrl(file)));
+      const nextImages = await Promise.all(imageFiles.slice(0, remainingSlots).map((file) => imageToStoredDataUrl(file)));
       onUpdateTask(task.id, {
-        screenshots: [...screenshots, ...nextImages].slice(0, 8),
+        screenshots: [...screenshots, ...nextImages].slice(0, MAX_NOTE_SCREENSHOTS),
       });
     } finally {
       setUploading(false);
@@ -808,8 +811,32 @@ function TaskNotesField({ task, onUpdateTask, compact = false }) {
     addScreenshots(imageFiles);
   }
 
+  function handleDragOver(event) {
+    if (!Array.from(event.dataTransfer?.items || []).some((item) => item.type?.startsWith("image/"))) return;
+    event.preventDefault();
+    setIsDragActive(true);
+  }
+
+  function handleDragLeave(event) {
+    if (event.currentTarget.contains(event.relatedTarget)) return;
+    setIsDragActive(false);
+  }
+
+  function handleDrop(event) {
+    const imageFiles = Array.from(event.dataTransfer?.files || []).filter((file) => file.type.startsWith("image/"));
+    if (!imageFiles.length) return;
+    event.preventDefault();
+    setIsDragActive(false);
+    addScreenshots(imageFiles);
+  }
+
   return (
-    <div className={cls("notes-field", compact && "notes-field--compact")}>
+    <div
+      className={cls("notes-field", compact && "notes-field--compact", isDragActive && "notes-field--drag")}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <textarea
         className={cls("cell-input", "cell-textarea", compact && "cell-textarea--compact")}
         rows={compact ? 2 : 3}
@@ -820,10 +847,10 @@ function TaskNotesField({ task, onUpdateTask, compact = false }) {
       />
 
       <div className="notes-field__toolbar">
-        <button type="button" className="notes-media-button" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+        <button type="button" className="notes-media-button" onClick={() => fileInputRef.current?.click()} disabled={uploading || !remainingSlots}>
           {uploading ? "Adding..." : "+ Screenshot"}
         </button>
-        <small>Paste or upload</small>
+        <small>{remainingSlots ? `Paste, drag, or upload · ${screenshots.length}/${MAX_NOTE_SCREENSHOTS}` : `Screenshot limit reached · ${MAX_NOTE_SCREENSHOTS}/${MAX_NOTE_SCREENSHOTS}`}</small>
         <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(event) => addScreenshots(event.target.files)} />
       </div>
 
