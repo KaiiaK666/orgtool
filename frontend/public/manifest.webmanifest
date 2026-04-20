@@ -1,0 +1,25 @@
+{
+  "name": "Organization Tool",
+  "short_name": "Org Tool",
+  "description": "Installable dealership workspace for projects, task groups, and quick status scanning.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f4f7fb",
+  "theme_color": "#3156f5",
+  "icons": [
+    {
+      "src": "/organization-tool-mark.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/organization-tool-mark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

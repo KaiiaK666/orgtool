@@ -29,9 +29,23 @@ const COLUMN_TYPE_OPTIONS = [
   { value: "tag", label: "Tag" },
 ];
 const DEPARTMENT_OPTIONS = ["Leadership", "BDC", "Sales", "Service", "Marketing", "Finance", "General"];
+const DISPLAY_MODE_QUERY = "(display-mode: standalone)";
 
 function cls(...parts) {
   return parts.filter(Boolean).join(" ");
+}
+
+function isIOSDevice() {
+  if (typeof navigator === "undefined") return false;
+  const agent = `${navigator.userAgent || ""} ${navigator.platform || ""}`.toLowerCase();
+  return /iphone|ipad|ipod/.test(agent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function isStandaloneApp() {
+  if (typeof window === "undefined") return false;
+  const displayModeStandalone = window.matchMedia?.(DISPLAY_MODE_QUERY).matches;
+  const safariStandalone = "standalone" in window.navigator && window.navigator.standalone === true;
+  return Boolean(displayModeStandalone || safariStandalone);
 }
 
 function useMediaQuery(query) {
@@ -58,6 +72,79 @@ function useMediaQuery(query) {
   }, [query]);
 
   return matches;
+}
+
+function useInstallState() {
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [installState, setInstallState] = useState(() => ({
+    isIOS: isIOSDevice(),
+    isStandalone: isStandaloneApp(),
+  }));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const updateState = () =>
+      setInstallState({
+        isIOS: isIOSDevice(),
+        isStandalone: isStandaloneApp(),
+      });
+
+    const handleBeforeInstallPrompt = (event) => {
+      event.preventDefault();
+      setDeferredPrompt(event);
+      updateState();
+    };
+
+    const handleAppInstalled = () => {
+      setDeferredPrompt(null);
+      updateState();
+    };
+
+    const media = window.matchMedia ? window.matchMedia(DISPLAY_MODE_QUERY) : null;
+    updateState();
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
+    document.addEventListener("visibilitychange", updateState);
+
+    if (media?.addEventListener) {
+      media.addEventListener("change", updateState);
+    } else if (media?.addListener) {
+      media.addListener(updateState);
+    }
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+      document.removeEventListener("visibilitychange", updateState);
+      if (media?.removeEventListener) {
+        media.removeEventListener("change", updateState);
+      } else if (media?.removeListener) {
+        media.removeListener(updateState);
+      }
+    };
+  }, []);
+
+  async function promptInstall() {
+    if (!deferredPrompt) return false;
+    deferredPrompt.prompt();
+    const choice = await deferredPrompt.userChoice.catch(() => null);
+    if (choice?.outcome === "accepted") {
+      setDeferredPrompt(null);
+      setInstallState((current) => ({ ...current, isStandalone: true }));
+      return true;
+    }
+    return false;
+  }
+
+  return {
+    isIOS: installState.isIOS,
+    isStandalone: installState.isStandalone,
+    canPromptInstall: Boolean(deferredPrompt),
+    canInstall: !installState.isStandalone && (Boolean(deferredPrompt) || installState.isIOS),
+    promptInstall,
+  };
 }
 
 function tone(value) {
@@ -304,6 +391,86 @@ function TutorialOverlay({ onClose }) {
   );
 }
 
+function InstallOverlay({ onClose, isIOS, canPromptInstall, onPromptInstall, installBusy }) {
+  return (
+    <div className="tutorial-overlay" role="dialog" aria-modal="true" aria-labelledby="install-title">
+      <div className="tutorial-backdrop" onClick={onClose} />
+      <section className="tutorial-sheet">
+        <div className="tutorial-sheet__head">
+          <div>
+            <span className="eyebrow">Install app</span>
+            <h2 id="install-title">Put Organization Tool on your Home Screen</h2>
+          </div>
+          <button type="button" className="ghost-button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        <p className="install-copy">
+          {isIOS
+            ? "On iPhone and iPad, install works through Safari. Once saved to the Home Screen, the app opens in its own standalone window."
+            : "This browser can install Organization Tool as a standalone app. Once installed, it opens outside the browser tab bar like a normal app."}
+        </p>
+
+        <div className="tutorial-grid">
+          {isIOS ? (
+            <>
+              <article className="tutorial-card">
+                <span className="tutorial-step">1</span>
+                <h3>Open in Safari</h3>
+                <p>If you are inside another browser or an in-app browser, open the site in Safari first. iPhone Home Screen install only works from Safari.</p>
+              </article>
+
+              <article className="tutorial-card">
+                <span className="tutorial-step">2</span>
+                <h3>Tap Share</h3>
+                <p>Use the Share button at the bottom of Safari. It looks like a square with an arrow pointing up.</p>
+              </article>
+
+              <article className="tutorial-card">
+                <span className="tutorial-step">3</span>
+                <h3>Add to Home Screen</h3>
+                <p>Scroll the Share sheet until you see <strong>Add to Home Screen</strong>, then tap it.</p>
+              </article>
+
+              <article className="tutorial-card">
+                <span className="tutorial-step">4</span>
+                <h3>Tap Add</h3>
+                <p>iPhone saves the app to your Home Screen. After that, Organization Tool opens like a standalone app instead of a browser page.</p>
+              </article>
+            </>
+          ) : (
+            <>
+              <article className="tutorial-card">
+                <span className="tutorial-step">1</span>
+                <h3>Use browser install</h3>
+                <p>Pick the install option below to let the browser add Organization Tool as a standalone app.</p>
+              </article>
+
+              <article className="tutorial-card">
+                <span className="tutorial-step">2</span>
+                <h3>Fallback menu install</h3>
+                <p>If your browser does not show a native prompt, open the browser menu and look for <strong>Install app</strong>, <strong>Apps</strong>, or <strong>Add to desktop</strong>.</p>
+              </article>
+            </>
+          )}
+        </div>
+
+        <div className="install-actions">
+          {canPromptInstall ? (
+            <button type="button" onClick={onPromptInstall} disabled={installBusy}>
+              {installBusy ? "Opening install..." : "Install app"}
+            </button>
+          ) : null}
+          <button type="button" className="ghost-button" onClick={onClose}>
+            Back
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function LoginScreen({
   username,
   onUsernameChange,
@@ -315,6 +482,8 @@ function LoginScreen({
   theme,
   onToggleTheme,
   onOpenTutorial,
+  onOpenInstall,
+  installAvailable,
   quickLoginUsers,
   onQuickLoginSelect,
 }) {
@@ -379,6 +548,11 @@ function LoginScreen({
           ) : null}
 
           <div className="login-shell__footer">
+            {installAvailable ? (
+              <button type="button" className="ghost-button" onClick={onOpenInstall}>
+                Install app
+              </button>
+            ) : null}
             <button type="button" className="ghost-button" onClick={onOpenTutorial}>
               Tutorial
             </button>
@@ -1454,7 +1628,9 @@ export default function App() {
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [projectForm, setProjectForm] = useState(blankProject(null));
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showInstall, setShowInstall] = useState(false);
   const isMobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
+  const install = useInstallState();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   async function load() {
@@ -1488,7 +1664,13 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     saveTheme(theme);
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.setAttribute("content", theme === "dark" ? "#0d1422" : "#3156f5");
   }, [theme]);
+
+  useEffect(() => {
+    if (install.isStandalone) setShowInstall(false);
+  }, [install.isStandalone]);
 
   const currentUser = useMemo(
     () => data.users.find((user) => Number(user.id) === Number(session?.user_id)) || null,
@@ -1589,6 +1771,16 @@ export default function App() {
   function handleQuickLoginSelect(nextUsername) {
     setLoginUsername(nextUsername);
     if (error) setError("");
+  }
+
+  async function handlePromptInstall() {
+    setBusy("install");
+    try {
+      const accepted = await install.promptInstall();
+      if (accepted) setShowInstall(false);
+    } finally {
+      setBusy("");
+    }
   }
 
   function beginPreview(userId) {
@@ -1819,10 +2011,21 @@ export default function App() {
           theme={theme}
           onToggleTheme={toggleTheme}
           onOpenTutorial={() => setShowTutorial(true)}
+          onOpenInstall={() => setShowInstall(true)}
+          installAvailable={install.canInstall}
           quickLoginUsers={quickLoginUsers}
           onQuickLoginSelect={handleQuickLoginSelect}
         />
         {showTutorial ? <TutorialOverlay onClose={() => setShowTutorial(false)} /> : null}
+        {showInstall ? (
+          <InstallOverlay
+            onClose={() => setShowInstall(false)}
+            isIOS={install.isIOS}
+            canPromptInstall={install.canPromptInstall}
+            onPromptInstall={handlePromptInstall}
+            installBusy={busy === "install"}
+          />
+        ) : null}
       </>
     );
   }
@@ -2021,6 +2224,15 @@ export default function App() {
         ) : null}
 
         {showTutorial ? <TutorialOverlay onClose={() => setShowTutorial(false)} /> : null}
+        {showInstall ? (
+          <InstallOverlay
+            onClose={() => setShowInstall(false)}
+            isIOS={install.isIOS}
+            canPromptInstall={install.canPromptInstall}
+            onPromptInstall={handlePromptInstall}
+            installBusy={busy === "install"}
+          />
+        ) : null}
       </main>
     </div>
   );
