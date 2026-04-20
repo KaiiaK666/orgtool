@@ -107,7 +107,12 @@ a {
 .loading-screen,
 .login-screen {
   min-height: 100vh;
-  padding: 28px;
+  min-height: 100dvh;
+  padding:
+    calc(28px + env(safe-area-inset-top, 0px))
+    calc(28px + env(safe-area-inset-right, 0px))
+    calc(28px + env(safe-area-inset-bottom, 0px))
+    calc(28px + env(safe-area-inset-left, 0px));
 }
 
 .loading-screen {
@@ -824,6 +829,15 @@ a {
 .workspace-shell--mobile {
   position: relative;
   grid-template-columns: 1fr;
+}
+
+.workspace-shell--mobile .main-panel {
+  padding:
+    calc(20px + env(safe-area-inset-top, 0px))
+    calc(16px + env(safe-area-inset-right, 0px))
+    calc(24px + env(safe-area-inset-bottom, 0px))
+    calc(16px + env(safe-area-inset-left, 0px));
+  gap: 16px;
 }
 
 .sidebar-backdrop {
@@ -1992,12 +2006,130 @@ a {
     width: 100%;
   }
 
-  .stats,
   .dashboard-grid,
   .project-grid,
   .form-grid,
   .tutorial-grid {
     grid-template-columns: 1fr;
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .stat-card,
+  .panel,
+  .group-card,
+  .sidebar-form,
+  .project-card,
+  .notice-card,
+  .roster-editor {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .stat-card strong {
+    font-size: 1.7rem;
+  }
+
+  .current-user {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .current-user small {
+    display: block;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  .main-nav button,
+  .ghost-button,
+  .theme-toggle,
+  .logout-button,
+  .toggle-chip,
+  .plus-button {
+    min-height: 46px;
+  }
+
+  .project-nav-item,
+  .activity-row {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .activity-row,
+  .panel__head,
+  .notice-card__top,
+  .project-card__top,
+  .project-hierarchy__head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .activity-row {
+    gap: 12px;
+  }
+
+  .activity-row__meta {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .topbar {
+    gap: 12px;
+  }
+
+  .topbar h2 {
+    font-size: clamp(1.7rem, 6vw, 2.3rem);
+    line-height: 0.98;
+  }
+
+  .topbar__meta {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .topbar__meta .theme-toggle {
+    margin-left: auto;
+  }
+
+  .board-hero {
+    gap: 14px;
+    padding: 18px;
+    border-radius: 22px;
+  }
+
+  .board-hero__controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .board-hero__controls > * {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .board-hero__controls .search {
+    grid-column: 1 / -1;
+  }
+
+  .color-control,
+  .color-control--inline,
+  .color-control--create {
+    min-width: 0;
+    max-width: none;
+  }
+
+  .project-group-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .project-group-row__meta {
+    white-space: normal;
   }
 
   .group-card__head,
@@ -2010,28 +2142,136 @@ a {
     justify-content: stretch;
   }
 
+  .group-card__actions {
+    width: 100%;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+  }
+
+  .group-card__actions .ghost-button {
+    width: 100%;
+  }
+
+  .mobile-task-card {
+    gap: 12px;
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .mobile-task-card__head {
+    gap: 12px;
+  }
+
+  .mobile-task-card__head .pill {
+    align-self: flex-start;
+  }
+
+  .mobile-task-card label {
+    gap: 6px;
+  }
+
   .mobile-task-card__grid {
     grid-template-columns: 1fr;
+  }
+
+  .mobile-task-card .cell-input,
+  .mobile-task-card .cell-select {
+    min-height: 48px;
+  }
+
+  .add-task-inline {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .add-task-inline .plus-button {
+    align-self: flex-start;
+  }
+
+  .tutorial-overlay {
+    padding: 16px;
+  }
+
+  .tutorial-sheet {
+    width: min(100%, 720px);
+    padding: 20px;
+    border-radius: 24px;
+  }
+
+  .install-actions {
+    flex-direction: column-reverse;
+  }
+
+  .install-actions button {
+    width: 100%;
   }
 }
 
 @media (max-width: 720px) {
   .loading-screen,
   .login-screen {
-    padding: 16px;
+    padding:
+      calc(16px + env(safe-area-inset-top, 0px))
+      calc(16px + env(safe-area-inset-right, 0px))
+      calc(18px + env(safe-area-inset-bottom, 0px))
+      calc(16px + env(safe-area-inset-left, 0px));
   }
 
   .login-shell__topbar {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
   }
 
-  .login-shell__footer {
-    justify-content: stretch;
+  .login-shell {
+    gap: 14px;
+  }
+
+  .login-shell__card {
+    padding: 20px 16px;
+    border-radius: 24px;
+    gap: 16px;
+  }
+
+  .login-shell__brand {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .login-shell__brand strong {
+    font-size: 0.95rem;
+  }
+
+  .login-shell__intro {
+    gap: 8px;
+  }
+
+  .login-shell__intro h1 {
+    max-width: none;
+    font-size: clamp(1.95rem, 9vw, 2.45rem);
+    line-height: 1.02;
+  }
+
+  .login-shell__intro p {
+    font-size: 0.98rem;
+    line-height: 1.5;
+  }
+
+  .login-form label {
+    gap: 6px;
   }
 
   .login-shell__footer > * {
     flex: 1 1 100%;
+  }
+
+  .login-form input {
+    min-height: 50px;
+  }
+
+  .quick-login-strip {
+    gap: 10px;
+    padding: 14px;
+    border-radius: 18px;
   }
 
   .login-shell__footer .ghost-button {
@@ -2048,30 +2288,94 @@ a {
     gap: 10px;
   }
 
-  .login-card h1 {
-    font-size: 2.3rem;
-  }
-
-  .login-title-cycle {
-    font-size: 2.3rem;
-  }
-
-  .brand-lockup--login {
+  .quick-login-strip__list {
+    display: grid;
     grid-template-columns: 1fr;
+    gap: 8px;
   }
 
-  .board-table {
-    min-width: 700px;
+  .quick-login-user {
+    width: 100%;
+    min-width: 0;
+    padding: 13px 14px;
   }
 
-  .board-table th:nth-child(5),
-  .board-table td:nth-child(5),
-  .board-table th:nth-child(6),
-  .board-table td:nth-child(6) {
-    display: none;
+  .topbar__meta {
+    width: 100%;
+    gap: 8px;
+    justify-content: flex-start;
+  }
+
+  .topbar__meta .theme-toggle {
+    margin-left: 0;
   }
 
   .sidebar--mobile {
-    width: min(92vw, 340px);
+    width: min(90vw, 360px);
+    padding:
+      calc(16px + env(safe-area-inset-top, 0px))
+      14px
+      calc(20px + env(safe-area-inset-bottom, 0px))
+      14px;
+  }
+}
+
+@media (max-width: 560px) {
+  .workspace-shell--mobile .main-panel {
+    padding:
+      calc(14px + env(safe-area-inset-top, 0px))
+      calc(12px + env(safe-area-inset-right, 0px))
+      calc(20px + env(safe-area-inset-bottom, 0px))
+      calc(12px + env(safe-area-inset-left, 0px));
+  }
+
+  .login-shell__topbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .login-shell__topbar .theme-toggle {
+    width: 100%;
+  }
+
+  .login-shell__footer {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
+  .stats {
+    grid-template-columns: 1fr;
+  }
+
+  .board-hero__controls,
+  .topbar__meta {
+    grid-template-columns: 1fr;
+  }
+
+  .board-hero__controls {
+    display: grid;
+  }
+
+  .group-card__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .project-nav-item {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .project-nav-item div {
+    min-width: 0;
+  }
+
+  .tutorial-sheet {
+    padding: 18px;
+    border-radius: 22px;
+  }
+
+  .tutorial-card {
+    padding: 16px;
   }
 }
