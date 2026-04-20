@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   createBoard,
   createBoardField,
@@ -23,10 +23,10 @@ const STATUS_OPTIONS = ["Overdue", "Pending", "Done"];
 const PRIORITY_OPTIONS = ["Critical", "High", "Medium", "Low"];
 const ROLE_OPTIONS = ["Admin", "Manager", "Coordinator", "Staff"];
 const COLUMN_TYPE_OPTIONS = [
-  { value: "text", label: "Text" },
-  { value: "number", label: "Number" },
-  { value: "date", label: "Date" },
-  { value: "tag", label: "Tag" },
+  { value: "text", label: "Open text", hint: "Flexible text for names, references, links, or freeform details." },
+  { value: "date", label: "Date", hint: "Calendar dates for deadlines, appointments, and follow-up targets." },
+  { value: "number", label: "Number", hint: "Counts, amounts, goals, and any numeric value you want to sort fast." },
+  { value: "tag", label: "Tag", hint: "Short labels like rooftop, campaign, lane, or source." },
 ];
 const DEPARTMENT_OPTIONS = ["Leadership", "BDC", "Sales", "Service", "Marketing", "Finance", "General"];
 const DISPLAY_MODE_QUERY = "(display-mode: standalone)";
@@ -194,6 +194,45 @@ function formatDate(value) {
   const parsed = new Date(`${value}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return value;
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(parsed);
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Unable to read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Unable to load image"));
+    image.src = dataUrl;
+  });
+}
+
+async function imageToStoredDataUrl(file) {
+  const dataUrl = await readFileAsDataUrl(file);
+  try {
+    const image = await loadImage(dataUrl);
+    const maxDimension = 1400;
+    const largestSide = Math.max(image.width || 0, image.height || 0);
+    if (!largestSide || largestSide <= maxDimension) return dataUrl;
+
+    const scale = maxDimension / largestSide;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(image.width * scale);
+    canvas.height = Math.round(image.height * scale);
+    const context = canvas.getContext("2d");
+    if (!context) return dataUrl;
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.82);
+  } catch {
+    return dataUrl;
+  }
 }
 
 function boardProgress(board) {
@@ -731,6 +770,79 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
   );
 }
 
+function TaskNotesField({ task, onUpdateTask, compact = false }) {
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const screenshots = Array.isArray(task.screenshots) ? task.screenshots : [];
+
+  function saveNotes(nextValue) {
+    if (String(task.notes || "") === String(nextValue || "")) return;
+    onUpdateTask(task.id, { notes: nextValue });
+  }
+
+  async function addScreenshots(fileList) {
+    const imageFiles = Array.from(fileList || []).filter((file) => file.type.startsWith("image/"));
+    if (!imageFiles.length) return;
+    setUploading(true);
+    try {
+      const nextImages = await Promise.all(imageFiles.slice(0, 4).map((file) => imageToStoredDataUrl(file)));
+      onUpdateTask(task.id, {
+        screenshots: [...screenshots, ...nextImages].slice(0, 8),
+      });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function removeScreenshot(indexToRemove) {
+    onUpdateTask(task.id, {
+      screenshots: screenshots.filter((_, index) => index !== indexToRemove),
+    });
+  }
+
+  function handlePaste(event) {
+    const imageFiles = Array.from(event.clipboardData?.files || []).filter((file) => file.type.startsWith("image/"));
+    if (!imageFiles.length) return;
+    event.preventDefault();
+    addScreenshots(imageFiles);
+  }
+
+  return (
+    <div className={cls("notes-field", compact && "notes-field--compact")}>
+      <textarea
+        className={cls("cell-input", "cell-textarea", compact && "cell-textarea--compact")}
+        rows={compact ? 2 : 3}
+        defaultValue={task.notes || ""}
+        placeholder="Notes"
+        onBlur={(event) => saveNotes(event.target.value)}
+        onPaste={handlePaste}
+      />
+
+      <div className="notes-field__toolbar">
+        <button type="button" className="notes-media-button" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+          {uploading ? "Adding..." : "+ Screenshot"}
+        </button>
+        <small>Paste or upload</small>
+        <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(event) => addScreenshots(event.target.files)} />
+      </div>
+
+      {screenshots.length ? (
+        <div className="notes-shot-list">
+          {screenshots.map((src, index) => (
+            <div key={`${task.id}-shot-${index}`} className="notes-shot">
+              <img src={src} alt={`Task screenshot ${index + 1}`} />
+              <button type="button" className="notes-shot__remove" onClick={() => removeScreenshot(index)}>
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function TaskRow({ task, board, users, onUpdateTask }) {
   function saveField(field, nextValue) {
     const currentValue = task[field] ?? "";
@@ -791,7 +903,7 @@ function TaskRow({ task, board, users, onUpdateTask }) {
         </select>
       </td>
       <td>
-        <input className="cell-input" defaultValue={task.notes || ""} onBlur={(event) => saveField("notes", event.target.value)} />
+        <TaskNotesField task={task} onUpdateTask={onUpdateTask} compact />
       </td>
       {board.fields.map((field) => {
         const value = task.custom_fields?.[String(field.id)] ?? "";
@@ -881,10 +993,10 @@ function MobileTaskCard({ task, board, users, onUpdateTask }) {
           </select>
         </label>
 
-        <label className="mobile-task-card__full">
+        <div className="mobile-task-card__full mobile-task-card__section">
           <span>Notes</span>
-          <input className="cell-input" defaultValue={task.notes || ""} onBlur={(event) => saveField("notes", event.target.value)} />
-        </label>
+          <TaskNotesField task={task} onUpdateTask={onUpdateTask} />
+        </div>
 
         {board.fields.map((field) => {
           const value = task.custom_fields?.[String(field.id)] ?? "";
@@ -958,6 +1070,8 @@ function ProjectBoard({
     if (!board?.id) return;
     persistColumnWidths(board.id, columnWidths);
   }, [board?.id, columnWidths]);
+
+  const selectedColumnType = COLUMN_TYPE_OPTIONS.find((option) => option.value === columnDraft.type) || COLUMN_TYPE_OPTIONS[0];
 
   if (!board) {
     return (
@@ -1137,22 +1251,42 @@ function ProjectBoard({
       ) : null}
 
       {showColumnForm ? (
-        <form className="panel inline-form" onSubmit={submitColumn}>
-          <label>
+        <form className="panel inline-form inline-form--column" onSubmit={submitColumn}>
+          <label className="full-span">
             <span>Column name</span>
-            <input value={columnDraft.name} onChange={(event) => setColumnDraft((current) => ({ ...current, name: event.target.value }))} />
+            <input
+              placeholder={selectedColumnType.value === "text" ? "Example: VIN, Store note, Call result" : `Example: ${selectedColumnType.label}`}
+              value={columnDraft.name}
+              onChange={(event) => setColumnDraft((current) => ({ ...current, name: event.target.value }))}
+            />
           </label>
-          <label>
-            <span>Type</span>
-            <select value={columnDraft.type} onChange={(event) => setColumnDraft((current) => ({ ...current, type: event.target.value }))}>
+          <div className="column-type-picker full-span">
+            <span>Field format</span>
+            <div className="column-type-picker__grid">
               {COLUMN_TYPE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
+                <button
+                  key={option.value}
+                  type="button"
+                  className={cls("column-type-card", columnDraft.type === option.value && "is-active")}
+                  onClick={() => setColumnDraft((current) => ({ ...current, type: option.value }))}
+                >
+                  <strong>{option.label}</strong>
+                  <small>{option.hint}</small>
+                </button>
               ))}
-            </select>
-          </label>
-          <button type="submit">Add column</button>
+            </div>
+          </div>
+          <div className="column-type-picker__summary full-span">
+            <span className="eyebrow">Selected format</span>
+            <strong>{selectedColumnType.label}</strong>
+            <p>{selectedColumnType.hint}</p>
+          </div>
+          <div className="board-editor__actions full-span">
+            <button type="button" className="ghost-button" onClick={() => setShowColumnForm(false)}>
+              Cancel
+            </button>
+            <button type="submit">Add column</button>
+          </div>
         </form>
       ) : null}
 
@@ -1926,6 +2060,7 @@ export default function App() {
         due_date: null,
         effort: 1,
         notes: "",
+        screenshots: [],
         custom_fields: {},
       });
       mutateBoard(activeBoard.id, (board) => ({ ...board, tasks: [...board.tasks, task] }));

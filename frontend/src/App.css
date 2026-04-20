@@ -1555,8 +1555,73 @@ a {
   align-items: end;
 }
 
+.inline-form--column {
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
 .inline-form--group {
   grid-template-columns: minmax(220px, 1fr) 132px auto;
+}
+
+.column-type-picker {
+  display: grid;
+  gap: 10px;
+}
+
+.column-type-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.panel .column-type-card,
+.column-type-card {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--text);
+  box-shadow: none;
+}
+
+.column-type-card strong {
+  font-size: 0.95rem;
+}
+
+.column-type-card small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.panel .column-type-card.is-active,
+.column-type-card.is-active {
+  border-color: rgba(49, 86, 245, 0.36);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px rgba(49, 86, 245, 0.14);
+}
+
+.column-type-picker__summary {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+.column-type-picker__summary strong {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1.1rem;
+}
+
+.column-type-picker__summary p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .board-editor {
@@ -1672,6 +1737,11 @@ a {
   grid-column: 1 / -1;
 }
 
+.mobile-task-card__section {
+  display: grid;
+  gap: 6px;
+}
+
 .mobile-task-card--overdue {
   background: linear-gradient(180deg, rgba(209, 79, 63, 0.18), rgba(209, 79, 63, 0.06));
   border-color: rgba(209, 79, 63, 0.32);
@@ -1783,7 +1853,7 @@ a {
 
 .board-table td {
   padding: 10px 8px;
-  vertical-align: middle;
+  vertical-align: top;
   background: transparent;
 }
 
@@ -1857,6 +1927,16 @@ a {
   font-weight: 700;
 }
 
+.cell-textarea {
+  min-height: 72px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.cell-textarea--compact {
+  min-height: 58px;
+}
+
 .cell-input--date {
   min-width: 9.5rem;
   max-width: 10.5rem;
@@ -1901,6 +1981,71 @@ a {
 
 .add-row td {
   padding-top: 14px;
+}
+
+.notes-field {
+  display: grid;
+  gap: 8px;
+}
+
+.notes-field--compact {
+  gap: 6px;
+}
+
+.notes-field__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.notes-field__toolbar small {
+  color: var(--muted);
+}
+
+.notes-media-button,
+.notes-shot__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.notes-shot-list {
+  display: grid;
+  gap: 8px;
+}
+
+.notes-shot {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.52);
+}
+
+:root[data-theme="dark"] .notes-shot {
+  background: rgba(12, 18, 31, 0.44);
+}
+
+.notes-shot img {
+  width: 100%;
+  max-height: 132px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.notes-shot__remove {
+  justify-self: start;
 }
 
 .add-task-inline {
@@ -2256,6 +2401,21 @@ a {
     min-height: 48px;
   }
 
+  .mobile-task-card .cell-textarea {
+    min-height: 88px;
+  }
+
+  .notes-field__toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .notes-media-button,
+  .notes-shot__remove {
+    width: 100%;
+    justify-content: center;
+  }
+
   .add-task-inline {
     flex-direction: column;
     align-items: stretch;
@@ -2281,6 +2441,10 @@ a {
 
   .install-actions button {
     width: 100%;
+  }
+
+  .column-type-picker__grid {
+    grid-template-columns: 1fr;
   }
 }
 
