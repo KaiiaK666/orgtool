@@ -1705,6 +1705,7 @@ function ProjectBoard({
   }));
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [groupEditDrafts, setGroupEditDrafts] = useState({});
+  const [collapsedGroups, setCollapsedGroups] = useState({});
 
   useEffect(() => {
     setSearch("");
@@ -1724,6 +1725,21 @@ function ProjectBoard({
     setEditingGroupId(null);
     setGroupEditDrafts({});
   }, [board?.id, board?.color, board?.fields?.length]);
+
+  useEffect(() => {
+    if (!board?.groups?.length) {
+      setCollapsedGroups({});
+      return;
+    }
+
+    setCollapsedGroups((current) => {
+      const next = {};
+      board.groups.forEach((group, index) => {
+        next[group.id] = typeof current[group.id] === "boolean" ? current[group.id] : isMobile ? index !== 0 : false;
+      });
+      return next;
+    });
+  }, [board?.id, board?.groups?.length, isMobile]);
 
   useEffect(() => {
     if (!board?.id) return;
@@ -1794,6 +1810,7 @@ function ProjectBoard({
 
   function openGroupEditor(group) {
     setEditingGroupId(group.id);
+    setCollapsedGroups((current) => ({ ...current, [group.id]: false }));
     setGroupEditDrafts((current) => ({
       ...current,
       [group.id]: {
@@ -1844,6 +1861,13 @@ function ProjectBoard({
 
   function columnKeyForField(field) {
     return `field:${field.id}`;
+  }
+
+  function toggleGroupCollapsed(groupId) {
+    setCollapsedGroups((current) => ({
+      ...current,
+      [groupId]: !current[groupId],
+    }));
   }
 
   return (
@@ -1960,17 +1984,40 @@ function ProjectBoard({
       <div className="group-stack">
         {board.groups.map((group) => {
           const tasks = visibleTasksForGroup(group.id);
+          const allTasks = sortTasks(board.tasks.filter((task) => task.group_id === group.id));
+          const collapsed = Boolean(collapsedGroups[group.id]);
+          const visibleLabel =
+            tasks.length === allTasks.length ? `${allTasks.length} task${allTasks.length === 1 ? "" : "s"}` : `${tasks.length} shown of ${allTasks.length}`;
+          const groupStatusCounts = STATUS_OPTIONS.map((status) => ({
+            status,
+            count: allTasks.filter((task) => visualStatus(task) === status).length,
+          })).filter((entry) => entry.count);
           const groupDraftValue = groupEditDrafts[group.id] || {
             name: group.name || "",
             color: group.color || board.color || "#3156f5",
           };
           return (
-            <section key={group.id} className="group-card" style={{ "--group-accent": group.color || board.color || "#3156f5" }}>
+            <section
+              key={group.id}
+              className={cls("group-card", collapsed && "group-card--collapsed")}
+              style={{ "--group-accent": group.color || board.color || "#3156f5" }}
+            >
               <div className="group-card__head">
-                <div className="group-card__meta">
-                  <h3>{group.name}</h3>
-                  <small>{tasks.length} tasks</small>
-                </div>
+                <button
+                  type="button"
+                  className="group-collapse-button"
+                  aria-expanded={!collapsed}
+                  aria-label={`${collapsed ? "Expand" : "Collapse"} ${group.name}`}
+                  onClick={() => toggleGroupCollapsed(group.id)}
+                >
+                  <span className="group-collapse-button__chevron" aria-hidden="true">
+                    {collapsed ? ">" : "v"}
+                  </span>
+                  <div className="group-card__meta">
+                    <h3>{group.name}</h3>
+                    <small>{visibleLabel}</small>
+                  </div>
+                </button>
 
                 <div className="group-card__actions">
                   <div className="group-card__swatch" style={{ "--group-swatch": group.color || board.color || "#3156f5" }} />
@@ -1980,163 +2027,179 @@ function ProjectBoard({
                 </div>
               </div>
 
-              {editingGroupId === group.id ? (
-                <form className="panel group-editor" onSubmit={(event) => submitGroupDetails(event, group)}>
-                  <label>
-                    <span>Task group name</span>
-                    <input
-                      value={groupDraftValue.name}
-                      onChange={(event) =>
-                        setGroupEditDrafts((current) => ({
-                          ...current,
-                          [group.id]: { ...groupDraftValue, name: event.target.value },
-                        }))
-                      }
-                    />
-                  </label>
-                  <label className="color-control color-control--create">
-                    <span>Task group color</span>
-                    <input
-                      type="color"
-                      value={groupDraftValue.color}
-                      onChange={(event) =>
-                        setGroupEditDrafts((current) => ({
-                          ...current,
-                          [group.id]: { ...groupDraftValue, color: event.target.value },
-                        }))
-                      }
-                    />
-                  </label>
-                  <div className="group-editor__actions">
-                    <button type="button" className="ghost-button" onClick={() => setEditingGroupId(null)}>
-                      Cancel
-                    </button>
-                    <button type="submit">Save group</button>
-                  </div>
-                </form>
-              ) : null}
+              <div className="group-card__summary">
+                {groupStatusCounts.length ? (
+                  groupStatusCounts.map((entry) => (
+                    <span key={`${group.id}-${entry.status}`} className={cls("group-card__summary-item", `group-card__summary-item--${tone(entry.status)}`)}>
+                      {entry.count} {entry.status}
+                    </span>
+                  ))
+                ) : (
+                  <span className="group-card__summary-item group-card__summary-item--empty">No tasks yet</span>
+                )}
+              </div>
 
-              {isMobile ? (
-                <div className="mobile-task-list">
-                  {tasks.map((task) => (
-                    <MobileTaskCard key={task.id} task={task} board={board} users={users} onUpdateTask={onUpdateTask} />
-                  ))}
-                  <form className="add-task-inline add-task-inline--mobile" onSubmit={(event) => submitQuickTask(event, group.id)}>
-                    <button type="submit" className="plus-button plus-button--small">
-                      +
-                    </button>
-                    <input
-                      placeholder={`Add task to ${group.name}`}
-                      value={quickTasks[group.id] || ""}
-                      onChange={(event) =>
-                        setQuickTasks((current) => ({
-                          ...current,
-                          [group.id]: event.target.value,
-                        }))
-                      }
-                    />
-                  </form>
-                </div>
-              ) : (
-                <div className="board-table-wrap">
-                  <table className="board-table">
-                    <colgroup>
-                      <col className="col-task" style={{ width: `${columnWidths.task}px` }} />
-                      <col className="col-priority" style={{ width: `${columnWidths.priority}px` }} />
-                      <col className="col-status" style={{ width: `${columnWidths.status}px` }} />
-                      <col className="col-date" style={{ width: `${columnWidths.due_date}px` }} />
-                      <col className="col-owner" style={{ width: `${columnWidths.owner}px` }} />
-                      <col className="col-notes" style={{ width: `${columnWidths.notes}px` }} />
-                      {board.fields.map((field) => (
-                        <col
-                          key={`column-width-${field.id}`}
-                          className={cls("col-custom", `col-custom--${field.type}`)}
-                          style={{ width: `${columnWidths[columnKeyForField(field)]}px` }}
+              {!collapsed ? (
+                <div className="group-card__body">
+                  {editingGroupId === group.id ? (
+                    <form className="panel group-editor" onSubmit={(event) => submitGroupDetails(event, group)}>
+                      <label>
+                        <span>Task group name</span>
+                        <input
+                          value={groupDraftValue.name}
+                          onChange={(event) =>
+                            setGroupEditDrafts((current) => ({
+                              ...current,
+                              [group.id]: { ...groupDraftValue, name: event.target.value },
+                            }))
+                          }
                         />
-                      ))}
-                    </colgroup>
-                    <thead>
-                      <tr>
-                        <th>
-                          <div className="th-inner">
-                            <span>Task</span>
-                            <button type="button" className="col-resizer" aria-label="Resize task column" onMouseDown={(event) => startColumnResize("task", 320, event)} />
-                          </div>
-                        </th>
-                        <th>
-                          <div className="th-inner">
-                            <span>Priority</span>
-                            <button type="button" className="col-resizer" aria-label="Resize priority column" onMouseDown={(event) => startColumnResize("priority", 140, event)} />
-                          </div>
-                        </th>
-                        <th>
-                          <div className="th-inner">
-                            <span>Status</span>
-                            <button type="button" className="col-resizer" aria-label="Resize status column" onMouseDown={(event) => startColumnResize("status", 140, event)} />
-                          </div>
-                        </th>
-                        <th>
-                          <div className="th-inner">
-                            <span>Due</span>
-                            <button type="button" className="col-resizer" aria-label="Resize due date column" onMouseDown={(event) => startColumnResize("due_date", 150, event)} />
-                          </div>
-                        </th>
-                        <th>
-                          <div className="th-inner">
-                            <span>Owner</span>
-                            <button type="button" className="col-resizer" aria-label="Resize owner column" onMouseDown={(event) => startColumnResize("owner", 170, event)} />
-                          </div>
-                        </th>
-                        <th>
-                          <div className="th-inner">
-                            <span>Notes</span>
-                            <button type="button" className="col-resizer" aria-label="Resize notes column" onMouseDown={(event) => startColumnResize("notes", 220, event)} />
-                          </div>
-                        </th>
-                        {board.fields.map((field) => (
-                          <th key={`column-head-${field.id}`}>
-                            <div className="th-inner">
-                              <span>{field.name}</span>
-                              <button
-                                type="button"
-                                className="col-resizer"
-                                aria-label={`Resize ${field.name} column`}
-                                onMouseDown={(event) =>
-                                  startColumnResize(columnKeyForField(field), field.type === "number" ? 120 : field.type === "date" ? 150 : 160, event)
-                                }
-                              />
-                            </div>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
+                      </label>
+                      <label className="color-control color-control--create">
+                        <span>Task group color</span>
+                        <input
+                          type="color"
+                          value={groupDraftValue.color}
+                          onChange={(event) =>
+                            setGroupEditDrafts((current) => ({
+                              ...current,
+                              [group.id]: { ...groupDraftValue, color: event.target.value },
+                            }))
+                          }
+                        />
+                      </label>
+                      <div className="group-editor__actions">
+                        <button type="button" className="ghost-button" onClick={() => setEditingGroupId(null)}>
+                          Cancel
+                        </button>
+                        <button type="submit">Save group</button>
+                      </div>
+                    </form>
+                  ) : null}
+
+                  {isMobile ? (
+                    <div className="mobile-task-list">
                       {tasks.map((task) => (
-                        <TaskRow key={task.id} task={task} board={board} users={users} onUpdateTask={onUpdateTask} />
+                        <MobileTaskCard key={task.id} task={task} board={board} users={users} onUpdateTask={onUpdateTask} />
                       ))}
-                      <tr className="add-row">
-                        <td colSpan={6 + board.fields.length}>
-                          <form className="add-task-inline" onSubmit={(event) => submitQuickTask(event, group.id)}>
-                            <button type="submit" className="plus-button plus-button--small">
-                              +
-                            </button>
-                            <input
-                              placeholder={`Add task to ${group.name}`}
-                              value={quickTasks[group.id] || ""}
-                              onChange={(event) =>
-                                setQuickTasks((current) => ({
-                                  ...current,
-                                  [group.id]: event.target.value,
-                                }))
-                              }
+                      <form className="add-task-inline add-task-inline--mobile" onSubmit={(event) => submitQuickTask(event, group.id)}>
+                        <button type="submit" className="plus-button plus-button--small">
+                          +
+                        </button>
+                        <input
+                          placeholder={`Add task to ${group.name}`}
+                          value={quickTasks[group.id] || ""}
+                          onChange={(event) =>
+                            setQuickTasks((current) => ({
+                              ...current,
+                              [group.id]: event.target.value,
+                            }))
+                          }
+                        />
+                      </form>
+                    </div>
+                  ) : (
+                    <div className="board-table-wrap">
+                      <table className="board-table">
+                        <colgroup>
+                          <col className="col-task" style={{ width: `${columnWidths.task}px` }} />
+                          <col className="col-priority" style={{ width: `${columnWidths.priority}px` }} />
+                          <col className="col-status" style={{ width: `${columnWidths.status}px` }} />
+                          <col className="col-date" style={{ width: `${columnWidths.due_date}px` }} />
+                          <col className="col-owner" style={{ width: `${columnWidths.owner}px` }} />
+                          <col className="col-notes" style={{ width: `${columnWidths.notes}px` }} />
+                          {board.fields.map((field) => (
+                            <col
+                              key={`column-width-${field.id}`}
+                              className={cls("col-custom", `col-custom--${field.type}`)}
+                              style={{ width: `${columnWidths[columnKeyForField(field)]}px` }}
                             />
-                          </form>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
+                          ))}
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th>
+                              <div className="th-inner">
+                                <span>Task</span>
+                                <button type="button" className="col-resizer" aria-label="Resize task column" onMouseDown={(event) => startColumnResize("task", 320, event)} />
+                              </div>
+                            </th>
+                            <th>
+                              <div className="th-inner">
+                                <span>Priority</span>
+                                <button type="button" className="col-resizer" aria-label="Resize priority column" onMouseDown={(event) => startColumnResize("priority", 140, event)} />
+                              </div>
+                            </th>
+                            <th>
+                              <div className="th-inner">
+                                <span>Status</span>
+                                <button type="button" className="col-resizer" aria-label="Resize status column" onMouseDown={(event) => startColumnResize("status", 140, event)} />
+                              </div>
+                            </th>
+                            <th>
+                              <div className="th-inner">
+                                <span>Due</span>
+                                <button type="button" className="col-resizer" aria-label="Resize due date column" onMouseDown={(event) => startColumnResize("due_date", 150, event)} />
+                              </div>
+                            </th>
+                            <th>
+                              <div className="th-inner">
+                                <span>Owner</span>
+                                <button type="button" className="col-resizer" aria-label="Resize owner column" onMouseDown={(event) => startColumnResize("owner", 170, event)} />
+                              </div>
+                            </th>
+                            <th>
+                              <div className="th-inner">
+                                <span>Notes</span>
+                                <button type="button" className="col-resizer" aria-label="Resize notes column" onMouseDown={(event) => startColumnResize("notes", 220, event)} />
+                              </div>
+                            </th>
+                            {board.fields.map((field) => (
+                              <th key={`column-head-${field.id}`}>
+                                <div className="th-inner">
+                                  <span>{field.name}</span>
+                                  <button
+                                    type="button"
+                                    className="col-resizer"
+                                    aria-label={`Resize ${field.name} column`}
+                                    onMouseDown={(event) =>
+                                      startColumnResize(columnKeyForField(field), field.type === "number" ? 120 : field.type === "date" ? 150 : 160, event)
+                                    }
+                                  />
+                                </div>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tasks.map((task) => (
+                            <TaskRow key={task.id} task={task} board={board} users={users} onUpdateTask={onUpdateTask} />
+                          ))}
+                          <tr className="add-row">
+                            <td colSpan={6 + board.fields.length}>
+                              <form className="add-task-inline" onSubmit={(event) => submitQuickTask(event, group.id)}>
+                                <button type="submit" className="plus-button plus-button--small">
+                                  +
+                                </button>
+                                <input
+                                  placeholder={`Add task to ${group.name}`}
+                                  value={quickTasks[group.id] || ""}
+                                  onChange={(event) =>
+                                    setQuickTasks((current) => ({
+                                      ...current,
+                                      [group.id]: event.target.value,
+                                    }))
+                                  }
+                                />
+                              </form>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
-              )}
+              ) : null}
             </section>
           );
         })}

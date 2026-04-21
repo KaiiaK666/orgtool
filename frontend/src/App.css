@@ -1545,12 +1545,30 @@ a {
 }
 
 .copilot-panel {
+  position: relative;
+  overflow: hidden;
   gap: 14px;
   padding: 18px;
   border-radius: 24px;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line));
   background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 14%, transparent), transparent 35%),
-    linear-gradient(180deg, var(--surface), var(--panel-soft));
+    radial-gradient(circle at top right, rgba(94, 200, 255, 0.18), transparent 34%),
+    linear-gradient(135deg, color-mix(in srgb, var(--accent-soft) 78%, var(--surface)) 0%, color-mix(in srgb, #dff1ff 58%, var(--surface)) 100%);
+}
+
+.copilot-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent), #5ec8ff 58%, #62d4a4);
+}
+
+:root[data-theme="dark"] .copilot-panel {
+  border-color: rgba(111, 140, 255, 0.34);
+  background:
+    radial-gradient(circle at top right, rgba(94, 200, 255, 0.14), transparent 34%),
+    linear-gradient(135deg, rgba(20, 34, 58, 0.98) 0%, rgba(13, 28, 50, 0.98) 100%);
 }
 
 .copilot-panel__head {
@@ -1808,12 +1826,41 @@ a {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
+}
+
+.group-collapse-button {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  box-shadow: none;
+}
+
+.group-collapse-button__chevron {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
 }
 
 .group-card__meta {
   display: grid;
-  gap: 6px;
+  gap: 4px;
+  min-width: 0;
 }
 
 .group-card__meta h3 {
@@ -1830,6 +1877,59 @@ a {
   border-radius: 999px;
   background: var(--group-swatch, var(--group-accent, var(--accent)));
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--group-swatch, var(--group-accent, var(--accent))) 18%, transparent);
+}
+
+.group-card__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.group-card__summary-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.group-card__summary-item--overdue {
+  background: color-mix(in srgb, var(--danger-bg) 80%, var(--surface));
+  border-color: color-mix(in srgb, var(--danger-line) 34%, transparent);
+  color: var(--danger-text);
+}
+
+.group-card__summary-item--pending {
+  background: color-mix(in srgb, var(--pending-bg) 86%, var(--surface));
+  border-color: color-mix(in srgb, var(--pending-line) 28%, transparent);
+  color: var(--pending-text);
+}
+
+.group-card__summary-item--done {
+  background: color-mix(in srgb, var(--success-bg) 86%, var(--surface));
+  border-color: color-mix(in srgb, var(--success-line) 28%, transparent);
+  color: var(--success-text);
+}
+
+.group-card__summary-item--empty {
+  color: var(--muted);
+}
+
+.group-card__body {
+  display: grid;
+  gap: 14px;
+}
+
+.group-card--collapsed .group-card__head {
+  margin-bottom: 6px;
 }
 
 .group-name-input {
@@ -1853,13 +1953,13 @@ a {
 
 .mobile-task-list {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .mobile-task-card {
   display: grid;
-  gap: 14px;
-  padding: 14px;
+  gap: 12px;
+  padding: 12px;
   border-radius: 18px;
   border: 1px solid var(--line);
   background: var(--surface-muted);
@@ -1873,7 +1973,7 @@ a {
 .mobile-task-card__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .mobile-task-card__full {
@@ -1883,6 +1983,15 @@ a {
 .mobile-task-card__section {
   display: grid;
   gap: 6px;
+}
+
+.mobile-task-card label span,
+.mobile-task-card__section > span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .mobile-task-card--overdue {
@@ -2129,8 +2238,8 @@ a {
 
 .notes-field {
   display: grid;
-  gap: 8px;
-  padding: 4px;
+  gap: 6px;
+  padding: 2px;
   border-radius: 16px;
   transition: background 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
@@ -2165,20 +2274,20 @@ a {
   border-radius: 10px;
   background: var(--surface);
   color: var(--text);
-  padding: 8px 10px;
-  font-size: 0.8rem;
+  padding: 7px 9px;
+  font-size: 0.76rem;
   font-weight: 700;
 }
 
 .notes-shot-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .notes-shot {
   display: grid;
-  gap: 6px;
-  padding: 8px;
+  gap: 4px;
+  padding: 6px;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.52);
@@ -2190,7 +2299,7 @@ a {
 
 .notes-shot img {
   width: 100%;
-  max-height: 132px;
+  max-height: 108px;
   object-fit: cover;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -2390,8 +2499,8 @@ a {
   .project-card,
   .notice-card,
   .roster-editor {
-    padding: 16px;
-    border-radius: 20px;
+    padding: 14px;
+    border-radius: 18px;
   }
 
   .panel--dashboard {
@@ -2448,12 +2557,17 @@ a {
   }
 
   .topbar {
-    gap: 12px;
+    gap: 10px;
   }
 
   .topbar h2 {
-    font-size: clamp(1.7rem, 6vw, 2.3rem);
-    line-height: 0.98;
+    font-size: clamp(1.55rem, 5.6vw, 2.15rem);
+    line-height: 1;
+  }
+
+  .topbar p {
+    font-size: 0.92rem;
+    line-height: 1.45;
   }
 
   .topbar__meta {
@@ -2467,15 +2581,22 @@ a {
   }
 
   .board-hero {
-    gap: 14px;
-    padding: 18px;
-    border-radius: 22px;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 18px;
   }
 
   .copilot-panel {
-    gap: 12px;
-    padding: 16px;
-    border-radius: 22px;
+    gap: 10px;
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .copilot-panel__lead,
+  .copilot-bubble p,
+  .copilot-confirm p {
+    font-size: 0.92rem;
+    line-height: 1.5;
   }
 
   .copilot-panel__head,
@@ -2494,6 +2615,8 @@ a {
     width: 100%;
     justify-content: flex-start;
     border-radius: 16px;
+    padding: 9px 12px;
+    font-size: 0.78rem;
   }
 
   .ghost-button--icon {
@@ -2545,6 +2668,20 @@ a {
     justify-content: stretch;
   }
 
+  .group-card__head {
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .group-collapse-button {
+    align-items: flex-start;
+  }
+
+  .group-collapse-button__chevron {
+    width: 24px;
+    height: 24px;
+  }
+
   .group-card__actions {
     width: 100%;
     grid-template-columns: auto 1fr;
@@ -2555,14 +2692,24 @@ a {
     width: 100%;
   }
 
+  .group-card__summary {
+    margin-bottom: 10px;
+  }
+
+  .group-card__summary-item {
+    min-height: 28px;
+    padding: 6px 9px;
+    font-size: 0.74rem;
+  }
+
   .mobile-task-card {
-    gap: 12px;
-    padding: 16px;
-    border-radius: 20px;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 16px;
   }
 
   .mobile-task-card__head {
-    gap: 12px;
+    gap: 8px;
   }
 
   .mobile-task-card__head .pill {
@@ -2579,11 +2726,13 @@ a {
 
   .mobile-task-card .cell-input,
   .mobile-task-card .cell-select {
-    min-height: 48px;
+    min-height: 44px;
+    padding: 9px 10px;
+    font-size: 0.92rem;
   }
 
   .mobile-task-card .cell-textarea {
-    min-height: 88px;
+    min-height: 72px;
   }
 
   .notes-field__toolbar {
@@ -2598,6 +2747,7 @@ a {
   }
 
   .add-task-inline {
+    gap: 8px;
     flex-direction: column;
     align-items: stretch;
   }
@@ -2646,6 +2796,22 @@ a {
 
   .copilot-thread {
     max-height: none;
+  }
+
+  .copilot-bubble,
+  .copilot-confirm {
+    padding: 12px 13px;
+    border-radius: 16px;
+  }
+
+  .copilot-compose {
+    gap: 10px;
+  }
+
+  .copilot-compose textarea {
+    min-height: 76px;
+    padding: 12px 13px;
+    border-radius: 16px;
   }
 
   .login-shell {
@@ -2711,7 +2877,7 @@ a {
 
   .topbar__main {
     display: grid;
-    gap: 10px;
+    gap: 8px;
   }
 
   .quick-login-strip__list {
@@ -2774,6 +2940,16 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .stat-card,
+  .panel,
+  .group-card,
+  .project-card,
+  .notice-card,
+  .roster-editor {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
   .board-hero__controls,
   .topbar__meta {
     grid-template-columns: 1fr;
@@ -2785,6 +2961,18 @@ a {
 
   .group-card__actions {
     grid-template-columns: 1fr;
+  }
+
+  .group-collapse-button {
+    gap: 10px;
+  }
+
+  .group-card__summary {
+    gap: 6px;
+  }
+
+  .mobile-task-list {
+    gap: 8px;
   }
 
   .project-nav-item {
