@@ -273,6 +273,379 @@ function boardGroupSummary(board) {
   });
 }
 
+function normalizePhrase(value = "") {
+  return String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function sentenceCase(value = "") {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function escapeRegExp(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function spokenJoin(parts) {
+  const items = parts.filter(Boolean);
+  if (!items.length) return "";
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
+function statusFromWord(word = "") {
+  const value = String(word || "").toLowerCase();
+  if (["done", "complete", "completed"].includes(value)) return "Done";
+  if (["pending", "open"].includes(value)) return "Pending";
+  if (value === "overdue") return "Overdue";
+  return null;
+}
+
+function extractStatusMentions(text = "") {
+  return Array.from(String(text || "").matchAll(/\b(done|complete|completed|pending|open|overdue)\b/gi))
+    .map((match) => statusFromWord(match[1]))
+    .filter(Boolean);
+}
+
+function toIsoDate(value) {
+  const next = new Date(value);
+  if (Number.isNaN(next.getTime())) return null;
+  next.setHours(0, 0, 0, 0);
+  return next.toISOString().slice(0, 10);
+}
+
+function addDays(baseDate, amount) {
+  const next = new Date(baseDate);
+  next.setDate(next.getDate() + amount);
+  return next;
+}
+
+function parseNaturalDate(value = "") {
+  const text = String(value || "").trim().toLowerCase().replace(/[.,]+$/g, "");
+  if (!text) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (text === "today") return toIsoDate(today);
+  if (text === "tomorrow") return toIsoDate(addDays(today, 1));
+  if (text === "next week") return toIsoDate(addDays(today, 7));
+
+  const nextWeekdayMatch = text.match(/^next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i);
+  if (nextWeekdayMatch) {
+    const weekdays = {
+      sunday: 0,
+      monday: 1,
+      tuesday: 2,
+      wednesday: 3,
+      thursday: 4,
+      friday: 5,
+      saturday: 6,
+    };
+    const targetDay = weekdays[nextWeekdayMatch[1].toLowerCase()];
+    const delta = (7 - today.getDay() + targetDay) % 7 || 7;
+    return toIsoDate(addDays(today, delta));
+  }
+
+  const slashMatch = text.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+  if (slashMatch) {
+    const [, monthText, dayText, yearText] = slashMatch;
+    const month = Number(monthText) - 1;
+    const day = Number(dayText);
+    const year = yearText ? Number(yearText.length === 2 ? `20${yearText}` : yearText) : today.getFullYear();
+    return toIsoDate(new Date(year, month, day));
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : toIsoDate(parsed);
+}
+
+function findNamedMatch(items, text, field = "name") {
+  const haystack = normalizePhrase(text);
+  if (!haystack) return null;
+
+  let best = null;
+  let bestScore = 0;
+
+  for (const item of items || []) {
+    const name = normalizePhrase(item?.[field] || "");
+    if (!name) continue;
+
+    let score = 0;
+    if (haystack === name) {
+      score = 1000 + name.length;
+    } else if (haystack.includes(name)) {
+      score = 600 + name.length;
+    } else {
+      const tokens = name.split(" ").filter(Boolean);
+      const matched = tokens.filter((token) => haystack.includes(token)).length;
+      if (matched && matched >= Math.ceil(tokens.length / 2)) score = matched * 20 + name.length;
+    }
+
+    if (score > bestScore) {
+      best = item;
+      bestScore = score;
+    }
+  }
+
+  return best;
+}
+
+function findGroupMention(board, text, fallbackGroup = null) {
+  const direct = findNamedMatch(board?.groups || [], text, "name");
+  if (direct) return direct;
+  if (fallbackGroup && /\b(this group|that group|same group|new one|that one)\b/i.test(text)) return fallbackGroup;
+  return fallbackGroup;
+}
+
+function findTaskMention(board, text) {
+  return findNamedMatch(board?.tasks || [], text, "name");
+}
+
+function splitAssistantClauses(text = "") {
+  return String(text || "")
+    .split(/\s+(?:and then|then|and)\s+(?=(?:mark|set|change|move|update|add|create|new|complete|finish)\b)/i)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function describeTask(task) {
+  const status = task.status || visualStatus(task);
+  return `${task.name} (${status}${task.due_date ? `, ${formatDate(task.due_date)}` : ""})`;
+}
+
+function buildReadOnlyAssistantResponse(input, board, currentUser) {
+  const text = normalizePhrase(input);
+  const looksLikeQuery = /\b(what|which|show|list|summarize|summary|how many|what's|whats)\b/i.test(input);
+  if (!looksLikeQuery && !/\b(my tasks|show my work)\b/i.test(input)) return null;
+  const groupMention = findGroupMention(board, text);
+  const tasks = sortTasks(board.tasks || []);
+  const scopedTasks = /\b(my|mine|assigned to me|my tasks)\b/i.test(input)
+    ? tasks.filter((task) => Number(task.owner_id) === Number(currentUser?.id))
+    : tasks;
+  const groupTasks = groupMention ? scopedTasks.filter((task) => Number(task.group_id) === Number(groupMention.id)) : scopedTasks;
+
+  if (/\b(task groups|groups|lanes|sections)\b/i.test(input)) {
+    const summaries = boardGroupSummary(board).map((group) => `${group.name} (${group.taskCount})`);
+    return summaries.length
+      ? `This board has ${spokenJoin(summaries.slice(0, 5))}${summaries.length > 5 ? ", and more" : ""}.`
+      : "This board does not have any task groups yet.";
+  }
+
+  if (/\boverdue\b/i.test(input)) {
+    const overdue = groupTasks.filter((task) => visualStatus(task) === "Overdue");
+    return overdue.length
+      ? `I found ${overdue.length} overdue task${overdue.length === 1 ? "" : "s"}: ${spokenJoin(overdue.slice(0, 4).map(describeTask))}${overdue.length > 4 ? ", and more" : ""}.`
+      : "Nothing is overdue right now.";
+  }
+
+  if (/\bpending\b/i.test(input)) {
+    const pending = groupTasks.filter((task) => visualStatus(task) === "Pending");
+    return pending.length
+      ? `You have ${pending.length} pending task${pending.length === 1 ? "" : "s"}: ${spokenJoin(pending.slice(0, 4).map(describeTask))}${pending.length > 4 ? ", and more" : ""}.`
+      : "Nothing is pending right now.";
+  }
+
+  if (/\b(my tasks|what do i have|what am i working on|show my work)\b/i.test(input)) {
+    return scopedTasks.length
+      ? `Here is what I see for you: ${spokenJoin(scopedTasks.slice(0, 5).map(describeTask))}${scopedTasks.length > 5 ? ", and more" : ""}.`
+      : "I do not see any tasks assigned to you on this board.";
+  }
+
+  return null;
+}
+
+function parseAssistantClause(clause, board, currentUser, context = {}) {
+  const workingText = String(clause || "").trim();
+  const lower = workingText.toLowerCase();
+  const fallbackGroup = context.group || null;
+  const group = findGroupMention(board, workingText, fallbackGroup);
+
+  const groupCreateMatch = workingText.match(/\b(?:create|add|new)\s+(?:a\s+)?(?:new\s+)?(?:task\s+)?group(?:\s+(?:called|named))?\s+["“]?(.+?)["”]?$/i);
+  if (groupCreateMatch) {
+    const name = groupCreateMatch[1].trim().replace(/\s+group$/i, "");
+    if (!name) return null;
+    return {
+      operation: { type: "create-group", name: sentenceCase(name), color: board.color || "#3156f5" },
+      context: { group: { id: null, name: sentenceCase(name), color: board.color || "#3156f5" } },
+    };
+  }
+
+  const noteMatch = workingText.match(/\b(?:add|append|update)\s+(?:a\s+)?note\s+(?:"([^"]+)"|“([^”]+)”|(.+?))\s+(?:to|for|on)\s+(.+)$/i);
+  if (noteMatch) {
+    const noteText = (noteMatch[1] || noteMatch[2] || noteMatch[3] || "").trim();
+    const task = findTaskMention(board, noteMatch[4]);
+    if (task && noteText) {
+      const nextNotes = [String(task.notes || "").trim(), sentenceCase(noteText)].filter(Boolean).join("\n");
+      return {
+        operation: {
+          type: "update-task",
+          taskId: task.id,
+          taskName: task.name,
+          changes: { notes: nextNotes },
+        },
+        context: { group: (board.groups || []).find((entry) => Number(entry.id) === Number(task.group_id)) || group },
+      };
+    }
+  }
+
+  const dateMatch =
+    workingText.match(/\b(?:change|set|move|update)\s+(?:the\s+)?(?:due date|date|deadline)\s+(?:of|for)?\s+(.+?)\s+(?:to|for|on)\s+(.+)$/i) ||
+    workingText.match(/\b(?:move|reschedule|set)\s+(.+?)\s+(?:to|for|on)\s+(.+)$/i);
+  if (dateMatch) {
+    const task = findTaskMention(board, dateMatch[1]);
+    const nextDate = parseNaturalDate(dateMatch[2]);
+    if (task && nextDate) {
+      return {
+        operation: {
+          type: "update-task",
+          taskId: task.id,
+          taskName: task.name,
+          changes: { due_date: nextDate },
+        },
+        context: { group: (board.groups || []).find((entry) => Number(entry.id) === Number(task.group_id)) || group },
+      };
+    }
+  }
+
+  const statusMentions = extractStatusMentions(workingText);
+  if (/\b(?:mark|set|change|complete|finish|update)\b/i.test(lower) && statusMentions.length) {
+    const targetStatus = statusMentions[statusMentions.length - 1];
+    const sourceStatus = statusMentions.length > 1 ? statusMentions[0] : null;
+    const task = !/\ball\b/i.test(lower) ? findTaskMention(board, workingText) : null;
+    const myOnly = /\b(my tasks|my task|mine|your tasks)\b/i.test(lower);
+
+    if (task) {
+      return {
+        operation: {
+          type: "update-task",
+          taskId: task.id,
+          taskName: task.name,
+          changes: { status: targetStatus },
+        },
+        context: { group: (board.groups || []).find((entry) => Number(entry.id) === Number(task.group_id)) || group },
+      };
+    }
+
+    const matchingTasks = (board.tasks || []).filter((entry) => {
+      if (group?.id && Number(entry.group_id) !== Number(group.id)) return false;
+      if (myOnly && Number(entry.owner_id) !== Number(currentUser?.id)) return false;
+      if (sourceStatus && visualStatus(entry) !== sourceStatus && entry.status !== sourceStatus) return false;
+      return true;
+    });
+
+    if (matchingTasks.length) {
+      return {
+        operation: {
+          type: "bulk-update",
+          taskIds: matchingTasks.map((entry) => entry.id),
+          taskCount: matchingTasks.length,
+          groupName: group?.name || null,
+          sourceStatus,
+          changes: { status: targetStatus },
+        },
+        context: { group },
+      };
+    }
+  }
+
+  if (/\b(?:create|add|new)\b/i.test(lower) && /\b(?:task|one)\b/i.test(lower)) {
+    const targetStatus = extractStatusMentions(workingText).slice(-1)[0] || "Pending";
+    const explicitDate = parseNaturalDate((workingText.match(/\b(?:due|for|on)\s+([a-z0-9,/\-\s]+)$/i) || [])[1] || "");
+
+    let name = workingText
+      .replace(/\b(?:create|add|new)\b/gi, "")
+      .replace(/\b(?:a|an)\b/gi, "")
+      .replace(/\b(?:new)\b/gi, "")
+      .replace(/\b(?:task|one)\b/gi, "")
+      .replace(/\b(?:called|named|for)\b/gi, "")
+      .replace(/\bas\s+(?:done|complete|completed|pending|open|overdue)\b/gi, "")
+      .replace(/\b(?:due|for|on)\s+[a-z0-9,/\-\s]+$/i, "")
+      .trim();
+
+    if (group?.name) {
+      name = name.replace(new RegExp(`\\b(?:in|to|under|for)\\s+(?:the\\s+)?${escapeRegExp(group.name)}(?:\\s+group)?\\b`, "ig"), "").trim();
+    }
+
+    if (name) {
+      return {
+        operation: {
+          type: "create-task",
+          groupId: group?.id || null,
+          groupName: group?.name || null,
+          name: sentenceCase(name),
+          status: targetStatus,
+          dueDate: explicitDate,
+          ownerId: currentUser?.id || null,
+          priority: "Medium",
+          notes: "",
+        },
+        context: { group },
+      };
+    }
+  }
+
+  return null;
+}
+
+function describeAssistantOperation(operation) {
+  switch (operation.type) {
+    case "create-group":
+      return `create a new task group called "${operation.name}"`;
+    case "create-task":
+      return `create a new ${operation.status} task called "${operation.name}"${operation.groupName ? ` in ${operation.groupName}` : ""}${operation.dueDate ? ` due ${formatDate(operation.dueDate)}` : ""}`;
+    case "update-task":
+      if (operation.changes.status) return `mark "${operation.taskName}" as ${operation.changes.status}`;
+      if (operation.changes.due_date) return `change the due date for "${operation.taskName}" to ${formatDate(operation.changes.due_date)}`;
+      if (operation.changes.notes) return `add a note to "${operation.taskName}"`;
+      return `update "${operation.taskName}"`;
+    case "bulk-update":
+      return `mark ${operation.taskCount} ${operation.sourceStatus ? `${operation.sourceStatus.toLowerCase()} ` : ""}task${operation.taskCount === 1 ? "" : "s"}${operation.groupName ? ` in ${operation.groupName}` : ""} as ${operation.changes.status}`;
+    default:
+      return "make the requested changes";
+  }
+}
+
+function buildAssistantPlan(input, board, currentUser) {
+  const readOnlyResponse = buildReadOnlyAssistantResponse(input, board, currentUser);
+  if (readOnlyResponse) {
+    return { mode: "answer", message: readOnlyResponse };
+  }
+
+  const clauses = splitAssistantClauses(input);
+  const operations = [];
+  let context = { group: null };
+
+  for (const clause of clauses) {
+    const parsed = parseAssistantClause(clause, board, currentUser, context);
+    if (!parsed?.operation) continue;
+    operations.push(parsed.operation);
+    context = { ...context, ...(parsed.context || {}) };
+  }
+
+  if (!operations.length) {
+    return {
+      mode: "answer",
+      message:
+        'I can change the real task list from here. Try something like "mark all my pending tasks in Queue as complete", "add note \\"Call printer today\\" to finalize trainer schedule", "move finalize trainer schedule to tomorrow", or "create a new task group called Natasha".',
+    };
+  }
+
+  const summary = spokenJoin(operations.map((operation) => describeAssistantOperation(operation)));
+  return {
+    mode: "proposal",
+    operations,
+    message: `Say yes if you want me to ${summary}.`,
+  };
+}
+
 function relevantBoards(boards, user) {
   if (!user) return boards;
   if (user.role === "Admin") return boards;
@@ -736,7 +1109,10 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
                             <i style={{ "--group-dot": group.color }} />
                             {group.name}
                           </span>
-                          <span className="project-group-row__meta">{group.taskCount} tasks</span>
+                          <span className="project-group-row__meta">
+                            <b>{group.taskCount}</b>
+                            <span>{group.taskCount === 1 ? "task" : "tasks"}</span>
+                          </span>
                         </div>
                       ))
                     ) : (
@@ -768,6 +1144,262 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
         </div>
       </section>
     </div>
+  );
+}
+
+function TaskCopilotPanel({ board, currentUser, onCreateTask, onUpdateTask, onCreateGroup }) {
+  const [draft, setDraft] = useState("");
+  const [history, setHistory] = useState([]);
+  const [pendingPlan, setPendingPlan] = useState(null);
+  const [voiceReplies, setVoiceReplies] = useState(true);
+  const [listening, setListening] = useState(false);
+  const [running, setRunning] = useState(false);
+  const recognitionRef = useRef(null);
+
+  useEffect(() => {
+    setHistory([
+      {
+        role: "assistant",
+        text: `I'm watching ${board?.name || "this board"}. Ask me to create tasks, mark work complete, add notes, change due dates, or create task groups. I will always ask before I change anything.`,
+      },
+    ]);
+    setPendingPlan(null);
+    setDraft("");
+  }, [board?.id]);
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop?.();
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  function appendMessage(role, text) {
+    setHistory((current) => [...current, { role, text }]);
+  }
+
+  function speak(text) {
+    if (!voiceReplies || typeof window === "undefined" || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(String(text || "").replace(/\s+/g, " ").trim());
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function reply(text) {
+    appendMessage("assistant", text);
+    speak(text);
+  }
+
+  function handleCancelPlan() {
+    setPendingPlan(null);
+    reply("Okay, I canceled that request. Tell me the next change you want me to line up.");
+  }
+
+  async function executePlan(plan) {
+    if (!plan?.operations?.length) return;
+    setRunning(true);
+    try {
+      let activeGroup = null;
+      const createdGroups = new Map();
+      const results = [];
+
+      for (const operation of plan.operations) {
+        if (operation.type === "create-group") {
+          const group = await onCreateGroup(operation.name, operation.color || board.color || "#3156f5");
+          if (group) {
+            createdGroups.set(normalizePhrase(operation.name), group);
+            activeGroup = group;
+            results.push(`Created task group "${group.name}".`);
+          }
+          continue;
+        }
+
+        if (operation.type === "create-task") {
+          const targetGroup =
+            (operation.groupId && (board.groups || []).find((entry) => Number(entry.id) === Number(operation.groupId))) ||
+            (operation.groupName && createdGroups.get(normalizePhrase(operation.groupName))) ||
+            activeGroup ||
+            board.groups?.[0];
+          if (!targetGroup) continue;
+
+          const task = await onCreateTask(targetGroup.id, operation.name, {
+            status: operation.status || "Pending",
+            due_date: operation.dueDate || null,
+            notes: operation.notes || "",
+            owner_id: operation.ownerId ?? currentUser?.id ?? null,
+            priority: operation.priority || "Medium",
+          });
+          activeGroup = targetGroup;
+          results.push(`Created "${task?.name || operation.name}" in ${targetGroup.name}.`);
+          continue;
+        }
+
+        if (operation.type === "update-task") {
+          await onUpdateTask(operation.taskId, operation.changes);
+          results.push(`${sentenceCase(operation.taskName)} updated.`);
+          continue;
+        }
+
+        if (operation.type === "bulk-update") {
+          for (const taskId of operation.taskIds || []) {
+            await onUpdateTask(taskId, operation.changes);
+          }
+          results.push(`Updated ${operation.taskCount} task${operation.taskCount === 1 ? "" : "s"}${operation.groupName ? ` in ${operation.groupName}` : ""}.`);
+        }
+      }
+
+      setPendingPlan(null);
+      reply(results.length ? spokenJoin(results) : "Done. I made the requested changes.");
+    } catch (error) {
+      reply(error?.message || "I could not finish that change.");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    const message = draft.trim();
+    if (!message) return;
+    appendMessage("user", message);
+    setDraft("");
+
+    if (pendingPlan && /^(yes|yep|yeah|confirm|do it|go ahead|please do|approved|sure)\b/i.test(message)) {
+      reply("Working on it.");
+      executePlan(pendingPlan);
+      return;
+    }
+
+    if (pendingPlan && /^(no|nope|cancel|stop|don'?t|never mind)\b/i.test(message)) {
+      handleCancelPlan();
+      return;
+    }
+
+    const plan = buildAssistantPlan(message, board, currentUser);
+    if (plan.mode === "proposal") {
+      setPendingPlan(plan);
+      reply(plan.message);
+      return;
+    }
+
+    reply(plan.message);
+  }
+
+  function beginListening() {
+    if (typeof window === "undefined") return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      reply("Voice input is not available in this browser, but the copilot still works with text.");
+      return;
+    }
+
+    if (listening) {
+      recognitionRef.current?.stop?.();
+      setListening(false);
+      return;
+    }
+
+    recognitionRef.current?.stop?.();
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => setListening(true);
+    recognition.onend = () => setListening(false);
+    recognition.onerror = () => {
+      setListening(false);
+      reply("I heard the mic fail. Try the text box or tap the mic again.");
+    };
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results || [])
+        .map((result) => result[0]?.transcript || "")
+        .join(" ")
+        .trim();
+      if (!transcript) return;
+      setDraft(transcript);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  }
+
+  return (
+    <section className="panel copilot-panel">
+      <div className="copilot-panel__head">
+        <div>
+          <span className="eyebrow">Task copilot</span>
+          <h3>Talk to your board</h3>
+        </div>
+
+        <div className="copilot-panel__controls">
+          <button type="button" className={cls("ghost-button", voiceReplies && "ghost-button--active")} onClick={() => setVoiceReplies((current) => !current)}>
+            {voiceReplies ? "Voice on" : "Voice off"}
+          </button>
+          <button type="button" className={cls("ghost-button", listening && "ghost-button--active")} onClick={beginListening}>
+            {listening ? "Listening..." : "Mic"}
+          </button>
+        </div>
+      </div>
+
+      <p className="copilot-panel__lead">
+        Ask me to create tasks, update notes, move due dates, mark work complete, or create new task groups. I will always ask before I change the real list.
+      </p>
+
+      <div className="copilot-panel__chips">
+        {[
+          'Mark all my pending tasks in Queue as complete',
+          'Add note "Need artwork from Natasha" to finalize trainer schedule',
+          "Move finalize trainer schedule to tomorrow",
+          "Create a new task group called Natasha",
+          "Add a new task called create flyer in Queue as pending",
+        ].map((prompt) => (
+          <button key={prompt} type="button" className="copilot-chip" onClick={() => setDraft(prompt)}>
+            {prompt}
+          </button>
+        ))}
+      </div>
+
+      <div className="copilot-thread">
+        {history.map((entry, index) => (
+          <article key={`${entry.role}-${index}`} className={cls("copilot-bubble", `copilot-bubble--${entry.role}`)}>
+            <strong>{entry.role === "assistant" ? "Copilot" : "You"}</strong>
+            <p>{entry.text}</p>
+          </article>
+        ))}
+      </div>
+
+      {pendingPlan ? (
+        <div className="copilot-confirm">
+          <strong>Awaiting permission</strong>
+          <p>{pendingPlan.message}</p>
+          <div className="copilot-confirm__actions">
+            <button type="button" onClick={() => executePlan(pendingPlan)} disabled={running}>
+              {running ? "Working..." : "Yes, do it"}
+            </button>
+            <button type="button" className="ghost-button" onClick={handleCancelPlan} disabled={running}>
+              No, cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <form className="copilot-compose" onSubmit={handleSubmit}>
+        <textarea
+          rows={3}
+          value={draft}
+          placeholder='Example: "Say yes if you want me to mark all my pending tasks in Queue as complete and create a new task called Create flyer as pending."'
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <button type="submit" disabled={!draft.trim() || running}>
+          {running ? "Working..." : "Send to copilot"}
+        </button>
+      </form>
+    </section>
   );
 }
 
@@ -1216,6 +1848,8 @@ function ProjectBoard({
 
   return (
     <div className="project-board">
+      <TaskCopilotPanel board={board} currentUser={currentUser} onCreateTask={onCreateTask} onUpdateTask={onUpdateTask} onCreateGroup={onCreateGroup} />
+
       <section className={cls("board-hero", `board-hero--${tone(boardTone(board))}`)}>
         <div className="board-hero__summary">
           <span className="eyebrow">{board.department}</span>
@@ -1230,8 +1864,14 @@ function ProjectBoard({
             {mineOnly ? "Only mine" : "All tasks"}
           </button>
 
-          <button type="button" className={cls("ghost-button", showBoardEditor && "ghost-button--active")} onClick={() => setShowBoardEditor((current) => !current)}>
-            {showBoardEditor ? "Close project" : "Edit project"}
+          <button
+            type="button"
+            className={cls("ghost-button", "ghost-button--icon", showBoardEditor && "ghost-button--active")}
+            aria-label={showBoardEditor ? "Close project editor" : "Edit project"}
+            title={showBoardEditor ? "Close project editor" : "Edit project"}
+            onClick={() => setShowBoardEditor((current) => !current)}
+          >
+            ✎
           </button>
 
           <button type="button" className="plus-button" onClick={() => setShowColumnForm((current) => !current)}>
@@ -2029,8 +2669,10 @@ export default function App() {
     try {
       const group = await createGroup({ board_id: activeBoard.id, name, color });
       mutateBoard(activeBoard.id, (board) => ({ ...board, groups: [...board.groups, group] }));
+      return group;
     } catch (submitError) {
       setError(submitError.message || "Unable to create task group");
+      return null;
     } finally {
       setBusy("");
     }
@@ -2046,8 +2688,10 @@ export default function App() {
         ...board,
         groups: board.groups.map((group) => (Number(group.id) === Number(groupId) ? { ...group, ...updated } : group)),
       }));
+      return updated;
     } catch (submitError) {
       setError(submitError.message || "Unable to update task group");
+      return null;
     } finally {
       setBusy("");
     }
@@ -2067,7 +2711,7 @@ export default function App() {
     }
   }
 
-  async function handleCreateTask(groupId, name) {
+  async function handleCreateTask(groupId, name, overrides = {}) {
     if (!activeBoard || !currentUser) return;
     setBusy(`create-task-${groupId}`);
     setError("");
@@ -2089,10 +2733,13 @@ export default function App() {
         notes: "",
         screenshots: [],
         custom_fields: {},
+        ...overrides,
       });
       mutateBoard(activeBoard.id, (board) => ({ ...board, tasks: [...board.tasks, task] }));
+      return task;
     } catch (submitError) {
       setError(submitError.message || "Unable to create task");
+      return null;
     } finally {
       setBusy("");
     }
@@ -2107,8 +2754,10 @@ export default function App() {
         ...board,
         tasks: board.tasks.map((task) => (Number(task.id) === Number(taskId) ? { ...task, ...updated } : task)),
       }));
+      return updated;
     } catch (submitError) {
       setError(submitError.message || "Unable to update task");
+      return null;
     }
   }
 

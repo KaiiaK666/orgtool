@@ -1002,13 +1002,13 @@ a {
 }
 
 .dashboard-view {
-  gap: 14px;
+  gap: 12px;
 }
 
 .panel--dashboard {
-  gap: 14px;
-  padding: 18px;
-  border-radius: 22px;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 20px;
 }
 
 .panel--dashboard .panel__head {
@@ -1029,8 +1029,8 @@ a {
 
 .stat-card strong {
   display: block;
-  margin-top: 8px;
-  font-size: 2rem;
+  margin-top: 4px;
+  font-size: 1.7rem;
   font-family: "Space Grotesk", sans-serif;
 }
 
@@ -1054,7 +1054,7 @@ a {
 .project-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  gap: 14px;
 }
 
 .dashboard-grid {
@@ -1066,8 +1066,8 @@ a {
 }
 
 .project-grid--dashboard {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 12px;
   align-items: start;
 }
 
@@ -1095,8 +1095,8 @@ a {
 
 .project-card--dashboard {
   min-height: 0;
-  gap: 12px;
-  padding: 16px;
+  gap: 10px;
+  padding: 14px;
   align-content: start;
 }
 
@@ -1131,14 +1131,15 @@ a {
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  line-height: 1.5;
+  line-height: 1.4;
+  margin: 0;
 }
 
 .project-hierarchy {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .project-hierarchy__head {
@@ -1149,16 +1150,16 @@ a {
 
 .project-hierarchy__list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .project-group-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 9px 11px;
-  border-radius: 14px;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--surface-muted);
 }
@@ -1187,8 +1188,14 @@ a {
 
 .project-group-row__meta {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   white-space: nowrap;
+  gap: 6px;
+}
+
+.project-group-row__meta b {
+  color: var(--text);
+  font-size: 0.82rem;
 }
 
 .project-group-row--overdue {
@@ -1218,8 +1225,20 @@ a {
 
 .project-card__footer {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   margin-top: auto;
+}
+
+.project-card__footer small {
+  font-size: 0.78rem;
+}
+
+.progress-row {
+  gap: 8px;
+}
+
+.progress-bar {
+  height: 6px;
 }
 
 .project-card--overdue {
@@ -1516,6 +1535,130 @@ a {
   background: var(--accent-soft);
   border-color: rgba(49, 86, 245, 0.3);
   color: var(--accent-deep);
+}
+
+.ghost-button--icon {
+  min-width: 48px;
+  width: 48px;
+  padding: 12px;
+  font-size: 1.05rem;
+}
+
+.copilot-panel {
+  gap: 14px;
+  padding: 18px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 14%, transparent), transparent 35%),
+    linear-gradient(180deg, var(--surface), var(--panel-soft));
+}
+
+.copilot-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.copilot-panel__controls,
+.copilot-confirm__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.copilot-panel__lead {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.copilot-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.copilot-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text);
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.panel .copilot-chip {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.copilot-thread {
+  display: grid;
+  gap: 10px;
+}
+
+.copilot-bubble {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+.copilot-bubble strong {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.copilot-bubble p,
+.copilot-confirm p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.copilot-bubble--assistant {
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 50%, var(--surface));
+}
+
+.copilot-bubble--user {
+  background: var(--surface);
+}
+
+.copilot-confirm {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface));
+}
+
+.copilot-compose {
+  display: grid;
+  gap: 12px;
+}
+
+.copilot-compose textarea {
+  width: 100%;
+  min-height: 92px;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 14px 16px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.copilot-compose button {
+  justify-self: start;
 }
 
 .color-control {
@@ -2329,6 +2472,35 @@ a {
     border-radius: 22px;
   }
 
+  .copilot-panel {
+    gap: 12px;
+    padding: 16px;
+    border-radius: 22px;
+  }
+
+  .copilot-panel__head,
+  .copilot-panel__controls,
+  .copilot-confirm__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .copilot-panel__controls > *,
+  .copilot-confirm__actions > * {
+    width: 100%;
+  }
+
+  .copilot-chip {
+    width: 100%;
+    justify-content: flex-start;
+    border-radius: 16px;
+  }
+
+  .ghost-button--icon {
+    width: 100%;
+    min-width: 0;
+  }
+
   .board-hero__controls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
@@ -2470,6 +2642,10 @@ a {
   .login-shell__topbar {
     align-items: center;
     flex-direction: row;
+  }
+
+  .copilot-thread {
+    max-height: none;
   }
 
   .login-shell {
