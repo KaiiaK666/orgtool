@@ -1,81 +1,119 @@
 # Agent Loops
 
-This project runs best when changes are made in short, bounded loops instead of broad redesign swings.
+This repo is run as a set of small agentic loops instead of one long unstructured stream of edits.
 
-## Primary Loop
+The goal is simple:
 
-1. Check the current user pain point.
-2. Compare local code against the live Render deployment.
-3. Fix one contained problem end to end.
+- keep the live app moving forward
+- keep local, GitHub, and Render aligned
+- keep each pass bounded enough to validate and ship
+
+## Loop Stack
+
+### 1. Active Delivery Loop
+
+Purpose:
+- move the product forward with one contained improvement at a time
+
+Cycle:
+1. Check the latest user pain point.
+2. Inspect the current code surface.
+3. Make one bounded change.
 4. Build locally.
 5. Push to `main`.
-6. Verify the live frontend and shared backend state.
-7. Log the next highest-signal issue.
+6. Verify the live frontend and backend state.
+7. Log the next blocker.
 
-## Active Loops
+Definition of done:
+- the improvement is coded, validated, pushed, and its live state is known
 
-### 1. UX Tightening Loop
+### 2. UX Tightening Loop
 
-Goal: reduce friction and visual noise in the main workspace.
+Purpose:
+- reduce friction, dead space, visual noise, and unclear states
 
 Focus:
 - dashboard density
-- project tile clarity
-- row readability
-- form alignment
+- project tile hierarchy
+- row clarity
+- column rhythm
 - dark mode polish
+- login clarity
 
-Stop condition:
-- one clearly visible UX problem is improved and verified
+Definition of done:
+- one visible UI problem is measurably better and does not regress adjacent surfaces
 
-### 2. Mobile Fit Loop
+### 3. Mobile Fit Loop
 
-Goal: make the app easy to use on phone-sized screens.
+Purpose:
+- keep the iPhone and narrow-width experience usable without extra explanation
 
 Focus:
-- navigation reachability
+- tap targets
+- sidebar behavior
 - card density
-- tap target sizing
-- board readability on narrow widths
-- install flow on iPhone
+- task-group readability
+- install flow
+- safe viewport spacing
 
-Stop condition:
-- one mobile pain point is removed and the layout still builds cleanly
+Definition of done:
+- one mobile pain point is removed and the layout still feels native enough on phone
 
-### 3. Data Interaction Loop
+### 4. Data Interaction Loop
 
-Goal: make editing faster without making the UI heavier.
+Purpose:
+- make the workspace faster to update without making it heavier
 
 Focus:
-- notes and screenshots
+- task creation
 - task group editing
 - project editing
+- notes and screenshots
 - custom field creation
-- column sizing and board controls
+- board table control
 
-Stop condition:
-- one workflow is measurably simpler or more complete
+Definition of done:
+- one workflow is clearly simpler, faster, or more complete
 
-### 4. Deploy Parity Loop
+### 5. Deploy Parity Loop
 
-Goal: keep local, GitHub, and Render aligned.
+Purpose:
+- keep local, GitHub, and Render in sync
 
 Checks:
-- latest local commit matches `origin/main`
-- live frontend asset hash updates after pushes
+- local HEAD matches `origin/main`
+- live frontend asset hash reflects the latest frontend push
 - shared backend exposes the expected API shape
-- Render rollout is not lagging behind the repo
+- expected deploys are not stalled
 
-Stop condition:
-- current change is confirmed live or the remaining blocker is identified clearly
+Definition of done:
+- the live state is confirmed, or the exact remaining deploy blocker is identified
+
+## Cadence
+
+- Active Delivery Loop: every active work session
+- UX Tightening Loop: several times per day during active polish
+- Mobile Fit Loop: at least once per day while UI changes are ongoing
+- Data Interaction Loop: whenever a workflow feels clumsy or incomplete
+- Deploy Parity Loop: after every push and on recurring heartbeat checks
+
+## Output Contract
+
+Each loop should produce one of these outcomes:
+
+- a pushed improvement
+- a verified live-state check
+- a bounded blocker with the exact failing surface
+- a short next-step entry in the backlog
 
 ## Guardrails
 
-- Prefer one small finished pass over one large unstable pass.
-- Do not redesign unrelated surfaces in the same loop.
+- Prefer one finished pass over one broad unstable redesign.
+- Do not mix unrelated redesigns into the same loop.
 - Validate locally before pushing.
 - Treat frontend and shared backend as separate deploy surfaces.
-- Keep changes legible for dealership users first, cleverness second.
+- Keep dealership usability above novelty.
+- If a loop uncovers a deploy lag, report that explicitly instead of pretending the feature is live.
 
 ## Current Surfaces
 
@@ -83,3 +121,32 @@ Stop condition:
 - Shared backend repo: `C:\Users\pando\OneDrive\Desktop\dealership-tool`
 - Frontend live URL: `https://orgtool-web.onrender.com`
 - Shared backend live URL: `https://dealership-tool-api.onrender.com/orgtool/api`
+
+## Operating Files
+
+- backlog: [AGENT_BACKLOG.md](./AGENT_BACKLOG.md)
+- live check script: [scripts/live_loop_check.py](./scripts/live_loop_check.py)
+- primary frontend surface: [frontend/src/App.jsx](./frontend/src/App.jsx)
+- primary frontend styles: [frontend/src/App.css](./frontend/src/App.css)
+
+## Standard Commands
+
+Frontend build:
+
+```powershell
+cd frontend
+npm.cmd run build
+```
+
+Backend compile:
+
+```powershell
+cd ..\dealership-tool
+python -m py_compile backend\orgtool_api.py
+```
+
+Live parity check:
+
+```powershell
+python .\scripts\live_loop_check.py
+```
