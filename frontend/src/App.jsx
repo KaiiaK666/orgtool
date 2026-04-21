@@ -5,6 +5,7 @@ import {
   createGroup,
   createTask,
   createUser,
+  deleteGroup,
   deleteUser,
   getBootstrap,
   login,
@@ -468,6 +469,36 @@ function parseAssistantClause(clause, board, currentUser, context = {}) {
   const fallbackGroup = context.group || null;
   const group = findGroupMention(board, workingText, fallbackGroup);
 
+  if (/\b(?:delete|remove)\b/i.test(lower) && /\b(?:task\s+groups?|groups?)\b/i.test(lower)) {
+    if (/\ball\b/i.test(lower)) {
+      const groups = board?.groups || [];
+      if (groups.length) {
+        return {
+          operation: {
+            type: "bulk-delete-groups",
+            groupIds: groups.map((entry) => entry.id),
+            groupCount: groups.length,
+            taskCount: (board?.tasks || []).length,
+          },
+          context: { group: null },
+        };
+      }
+    }
+
+    if (group?.id) {
+      const linkedTasks = (board?.tasks || []).filter((task) => Number(task.group_id) === Number(group.id)).length;
+      return {
+        operation: {
+          type: "delete-group",
+          groupId: group.id,
+          groupName: group.name,
+          taskCount: linkedTasks,
+        },
+        context: { group: null },
+      };
+    }
+  }
+
   const groupCreateMatch = workingText.match(/\b(?:create|add|new)\s+(?:a\s+)?(?:new\s+)?(?:task\s+)?group(?:\s+(?:called|named))?\s+["“]?(.+?)["”]?$/i);
   if (groupCreateMatch) {
     const name = groupCreateMatch[1].trim().replace(/\s+group$/i, "");
@@ -597,6 +628,10 @@ function parseAssistantClause(clause, board, currentUser, context = {}) {
 
 function describeAssistantOperation(operation) {
   switch (operation.type) {
+    case "delete-group":
+      return `delete the task group "${operation.groupName}"${operation.taskCount ? ` and its ${operation.taskCount} task${operation.taskCount === 1 ? "" : "s"}` : ""}`;
+    case "bulk-delete-groups":
+      return `delete all ${operation.groupCount} task groups${operation.taskCount ? ` and their ${operation.taskCount} task${operation.taskCount === 1 ? "" : "s"}` : ""}`;
     case "create-group":
       return `create a new task group called "${operation.name}"`;
     case "create-task":
@@ -631,10 +666,17 @@ function buildAssistantPlan(input, board, currentUser) {
   }
 
   if (!operations.length) {
+    if (/\b(?:delete|remove)\b/i.test(input) && /\b(?:task\s+groups?|groups?)\b/i.test(input)) {
+      return {
+        mode: "answer",
+        message: 'I can remove task groups too. Say "delete the Natasha group" or "delete all task groups" and I will ask for confirmation before I change the board.',
+      };
+    }
+
     return {
       mode: "answer",
       message:
-        'I can change the real task list from here. Try something like "mark all my pending tasks in Queue as complete", "add note \\"Call printer today\\" to finalize trainer schedule", "move finalize trainer schedule to tomorrow", or "create a new task group called Natasha".',
+        'I can change the real task list from here. Try "mark all my pending tasks in Queue as complete", "add note \\"Call printer today\\" to finalize trainer schedule", "move finalize trainer schedule to tomorrow", "create a new task group called Natasha", or "delete all task groups".',
     };
   }
 
@@ -1147,7 +1189,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
   );
 }
 
-function TaskCopilotPanel({ board, currentUser, onCreateTask, onUpdateTask, onCreateGroup }) {
+function TaskCopilotPanel({ board, currentUser, onCreateTask, onUpdateTask, onCreateGroup, onDeleteGroup }) {
   const [draft, setDraft] = useState("");
   const [history, setHistory] = useState([]);
   const [pendingPlan, setPendingPlan] = useState(null);
@@ -1160,7 +1202,7 @@ function TaskCopilotPanel({ board, currentUser, onCreateTask, onUpdateTask, onCr
     setHistory([
       {
         role: "assistant",
-        text: `I'm watching ${board?.name || "this board"}. Ask me to create tasks, mark work complete, add notes, change due dates, or create task groups. I will always ask before I change anything.`,
+        text: `I'm watching ${board?.name || "this board"}. Ask me to create tasks, mark work complete, add notes, change due dates, delete task groups, or create new ones. I will always ask before I change anything.`,
       },
     ]);
     setPendingPlan(null);
@@ -1208,6 +1250,26 @@ function TaskCopilotPanel({ board, currentUser, onCreateTask, onUpdateTask, onCr
       const results = [];
 
       for (const operation of plan.operations) {
+        if (operation.type === "delete-group") {
+          const result = await onDeleteGroup(operation.groupId);
+          if (result?.deleted) {
+            results.push(`Deleted task group "${operation.groupName}".`);
+          }
+          activeGroup = null;
+          continue;
+        }
+
+        if (operation.type === "bulk-delete-groups") {
+          let deletedTasks = 0;
+          for (const groupId of operation.groupIds || []) {
+            const result = await onDeleteGroup(groupId);
+            deletedTasks += Number(result?.deleted_tasks || 0);
+          }
+          results.push(`Deleted ${operation.groupCount} task group${operation.groupCount === 1 ? "" : "s"}${deletedTasks ? ` and ${deletedTasks} task${deletedTasks === 1 ? "" : "s"}` : ""}.`);
+          activeGroup = null;
+          continue;
+        }
+
         if (operation.type === "create-group") {
           const group = await onCreateGroup(operation.name, operation.color || board.color || "#3156f5");
           if (group) {
@@ -1338,16 +1400,16 @@ function TaskCopilotPanel({ board, currentUser, onCreateTask, onUpdateTask, onCr
 
         <div className="copilot-panel__controls">
           <button type="button" className={cls("ghost-button", voiceReplies && "ghost-button--active")} onClick={() => setVoiceReplies((current) => !current)}>
-            {voiceReplies ? "Voice on" : "Voice off"}
+            {voiceReplies ? "Spoken replies on" : "Spoken replies off"}
           </button>
           <button type="button" className={cls("ghost-button", listening && "ghost-button--active")} onClick={beginListening}>
-            {listening ? "Listening..." : "Mic"}
+            {listening ? "Stop voice input" : "Start voice input"}
           </button>
         </div>
       </div>
 
       <p className="copilot-panel__lead">
-        Ask me to create tasks, update notes, move due dates, mark work complete, or create new task groups. I will always ask before I change the real list.
+        Ask me to create tasks, update notes, move due dates, mark work complete, delete task groups, or create new ones. I always ask before I change the real board.
       </p>
 
       <div className="copilot-panel__chips">
@@ -1357,6 +1419,7 @@ function TaskCopilotPanel({ board, currentUser, onCreateTask, onUpdateTask, onCr
           "Move finalize trainer schedule to tomorrow",
           "Create a new task group called Natasha",
           "Add a new task called create flyer in Queue as pending",
+          "Delete all task groups",
         ].map((prompt) => (
           <button key={prompt} type="button" className="copilot-chip" onClick={() => setDraft(prompt)}>
             {prompt}
@@ -1684,6 +1747,7 @@ function ProjectBoard({
   onUpdateTask,
   onCreateTask,
   onCreateGroup,
+  onDeleteGroup,
   onUpdateGroup,
   onCreateField,
   onUpdateBoard,
@@ -1872,7 +1936,14 @@ function ProjectBoard({
 
   return (
     <div className="project-board">
-      <TaskCopilotPanel board={board} currentUser={currentUser} onCreateTask={onCreateTask} onUpdateTask={onUpdateTask} onCreateGroup={onCreateGroup} />
+      <TaskCopilotPanel
+        board={board}
+        currentUser={currentUser}
+        onCreateTask={onCreateTask}
+        onUpdateTask={onUpdateTask}
+        onCreateGroup={onCreateGroup}
+        onDeleteGroup={onDeleteGroup}
+      />
 
       <section className={cls("board-hero", `board-hero--${tone(boardTone(board))}`)}>
         <div className="board-hero__summary">
@@ -1981,8 +2052,17 @@ function ProjectBoard({
         </form>
       ) : null}
 
-      <div className="group-stack">
-        {board.groups.map((group) => {
+      <section className="task-zone">
+        <div className="task-zone__head">
+          <div>
+            <span className="eyebrow">Task groups</span>
+            <h3>Live tasking area</h3>
+          </div>
+          <p>Collapse groups when you want a tighter view, then expand only the section you need to work in.</p>
+        </div>
+
+        <div className="group-stack">
+          {board.groups.map((group) => {
           const tasks = visibleTasksForGroup(group.id);
           const allTasks = sortTasks(board.tasks.filter((task) => task.group_id === group.id));
           const collapsed = Boolean(collapsedGroups[group.id]);
@@ -1997,11 +2077,11 @@ function ProjectBoard({
             color: group.color || board.color || "#3156f5",
           };
           return (
-            <section
-              key={group.id}
-              className={cls("group-card", collapsed && "group-card--collapsed")}
-              style={{ "--group-accent": group.color || board.color || "#3156f5" }}
-            >
+              <section
+                key={group.id}
+                className={cls("group-card", collapsed && "group-card--collapsed")}
+                style={{ "--group-accent": group.color || board.color || "#3156f5" }}
+              >
               <div className="group-card__head">
                 <button
                   type="button"
@@ -2200,22 +2280,23 @@ function ProjectBoard({
                   )}
                 </div>
               ) : null}
-            </section>
-          );
-        })}
-      </div>
+              </section>
+            );
+          })}
+        </div>
 
-      <form className="panel inline-form inline-form--group" onSubmit={submitGroup}>
-        <label>
-          <span>New task group</span>
-          <input placeholder="This week" value={groupDraft.name} onChange={(event) => setGroupDraft((current) => ({ ...current, name: event.target.value }))} />
-        </label>
-        <label className="color-control color-control--create">
-          <span>Color</span>
-          <input type="color" value={groupDraft.color} onChange={(event) => setGroupDraft((current) => ({ ...current, color: event.target.value }))} />
-        </label>
-        <button type="submit">+ Add Task Group</button>
-      </form>
+        <form className="panel inline-form inline-form--group" onSubmit={submitGroup}>
+          <label>
+            <span>New task group</span>
+            <input placeholder="This week" value={groupDraft.name} onChange={(event) => setGroupDraft((current) => ({ ...current, name: event.target.value }))} />
+          </label>
+          <label className="color-control color-control--create">
+            <span>Color</span>
+            <input type="color" value={groupDraft.color} onChange={(event) => setGroupDraft((current) => ({ ...current, color: event.target.value }))} />
+          </label>
+          <button type="submit">+ Add Task Group</button>
+        </form>
+      </section>
     </div>
   );
 }
@@ -2760,6 +2841,26 @@ export default function App() {
     }
   }
 
+  async function handleDeleteGroup(groupId) {
+    if (!activeBoard) return null;
+    setBusy(`delete-group-${groupId}`);
+    setError("");
+    try {
+      const result = await deleteGroup(activeBoard.id, groupId);
+      mutateBoard(activeBoard.id, (board) => ({
+        ...board,
+        groups: board.groups.filter((group) => Number(group.id) !== Number(groupId)),
+        tasks: board.tasks.filter((task) => Number(task.group_id) !== Number(groupId)),
+      }));
+      return result;
+    } catch (submitError) {
+      setError(submitError.message || "Unable to delete task group");
+      return null;
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function handleCreateField(draft) {
     if (!activeBoard) return;
     setBusy("create-column");
@@ -3089,6 +3190,7 @@ export default function App() {
             onUpdateTask={handleUpdateTask}
             onCreateTask={handleCreateTask}
             onCreateGroup={handleCreateGroup}
+            onDeleteGroup={handleDeleteGroup}
             onUpdateGroup={handleUpdateGroup}
             onCreateField={handleCreateField}
             onUpdateBoard={handleUpdateBoard}

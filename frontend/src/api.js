@@ -107,6 +107,12 @@ export function updateGroup(boardId, groupId, payload) {
   }).then(unwrap("group"));
 }
 
+export function deleteGroup(boardId, groupId) {
+  return request(`/api/boards/${boardId}/groups/${groupId}`, {
+    method: "DELETE",
+  });
+}
+
 export function createTask(payload) {
   return request("/api/tasks", { method: "POST", body: JSON.stringify(payload) }).then(unwrap("task"));
 }

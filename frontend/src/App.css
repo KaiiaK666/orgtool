@@ -1592,6 +1592,10 @@ a {
   line-height: 1.6;
 }
 
+.copilot-panel__controls .ghost-button {
+  min-height: 44px;
+}
+
 .copilot-panel__chips {
   display: flex;
   flex-wrap: wrap;
@@ -1677,6 +1681,39 @@ a {
 
 .copilot-compose button {
   justify-self: start;
+}
+
+.task-zone {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 28px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-muted) 72%, var(--surface)) 0%, var(--surface) 100%);
+  box-shadow: var(--shadow);
+}
+
+.task-zone__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.task-zone__head h3 {
+  margin: 0;
+}
+
+.task-zone__head p {
+  max-width: 34rem;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+:root[data-theme="dark"] .task-zone {
+  background: linear-gradient(180deg, rgba(18, 26, 43, 0.96) 0%, rgba(12, 19, 33, 0.98) 100%);
+  border-color: color-mix(in srgb, var(--line) 88%, transparent);
 }
 
 .color-control {
@@ -2673,6 +2710,23 @@ a {
     margin-bottom: 8px;
   }
 
+  .task-zone {
+    gap: 12px;
+    padding: 14px;
+    border-radius: 20px;
+  }
+
+  .task-zone__head {
+    display: grid;
+    gap: 8px;
+  }
+
+  .task-zone__head p {
+    max-width: none;
+    font-size: 0.9rem;
+    line-height: 1.45;
+  }
+
   .group-collapse-button {
     align-items: flex-start;
   }
@@ -2880,6 +2934,10 @@ a {
     gap: 8px;
   }
 
+  .copilot-panel__controls .ghost-button {
+    min-height: 42px;
+  }
+
   .quick-login-strip__list {
     display: grid;
     grid-template-columns: 1fr;
@@ -2948,6 +3006,11 @@ a {
   .roster-editor {
     padding: 12px;
     border-radius: 16px;
+  }
+
+  .task-zone {
+    padding: 12px;
+    border-radius: 18px;
   }
 
   .board-hero__controls,
