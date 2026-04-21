@@ -891,7 +891,7 @@ function TaskRow({ task, board, users, onUpdateTask }) {
     });
   }
 
-  const rowStatus = visualStatus(task);
+  const rowStatus = task.status || visualStatus(task);
 
   return (
     <tr className={cls("task-row", `task-row--${tone(rowStatus)}`)}>
@@ -908,7 +908,7 @@ function TaskRow({ task, board, users, onUpdateTask }) {
         </select>
       </td>
       <td>
-        <select className={cls("cell-select", `cell-select--${tone(rowStatus)}`)} value={task.status} onChange={(event) => saveField("status", event.target.value)}>
+        <select className={cls("cell-select", `cell-select--${tone(task.status || rowStatus)}`)} value={task.status} onChange={(event) => saveField("status", event.target.value)}>
           {STATUS_OPTIONS.map((option) => (
             <option key={option} value={option}>
               {option}
@@ -971,7 +971,7 @@ function MobileTaskCard({ task, board, users, onUpdateTask }) {
     });
   }
 
-  const rowStatus = visualStatus(task);
+  const rowStatus = task.status || visualStatus(task);
 
   return (
     <article className={cls("mobile-task-card", `mobile-task-card--${tone(rowStatus)}`)}>
@@ -994,7 +994,7 @@ function MobileTaskCard({ task, board, users, onUpdateTask }) {
 
         <label>
           <span>Status</span>
-          <select className={cls("cell-select", `cell-select--${tone(rowStatus)}`)} value={task.status} onChange={(event) => saveField("status", event.target.value)}>
+          <select className={cls("cell-select", `cell-select--${tone(task.status || rowStatus)}`)} value={task.status} onChange={(event) => saveField("status", event.target.value)}>
             {STATUS_OPTIONS.map((option) => (
               <option key={option} value={option}>
                 {option}

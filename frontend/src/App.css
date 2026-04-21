@@ -1765,7 +1765,7 @@ a {
   width: 100%;
   min-width: 920px;
   border-collapse: separate;
-  border-spacing: 0 8px;
+  border-spacing: 0 6px;
 }
 
 .col-task {
@@ -1852,55 +1852,53 @@ a {
 }
 
 .board-table td {
-  padding: 10px 8px;
+  padding: 8px 6px;
   vertical-align: top;
   background: transparent;
 }
 
+.task-row {
+  --row-bg: var(--surface);
+  --row-border: color-mix(in srgb, var(--line) 88%, transparent);
+  --row-rail: var(--pending-line);
+}
+
 .task-row td {
-  background: var(--surface-muted);
-  border-top: 1px solid transparent;
-  border-bottom: 1px solid transparent;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  background: var(--row-bg);
+  border-top: 1px solid var(--row-border);
+  border-bottom: 1px solid var(--row-border);
+  box-shadow: none;
 }
 
 .task-row td:first-child {
   border-radius: 16px 0 0 16px;
-  border-left: 10px solid transparent;
+  border-left: 7px solid var(--row-rail);
 }
 
 .task-row td:last-child {
   border-radius: 0 16px 16px 0;
 }
 
-.task-row--overdue td {
-  background: linear-gradient(90deg, rgba(209, 79, 63, 0.34), rgba(209, 79, 63, 0.18));
-  border-top-color: rgba(209, 79, 63, 0.28);
-  border-bottom-color: rgba(209, 79, 63, 0.28);
+.task-row--overdue {
+  --row-bg: color-mix(in srgb, var(--danger-bg) 40%, var(--surface));
+  --row-border: color-mix(in srgb, var(--danger-line) 26%, transparent);
+  --row-rail: var(--danger-line);
 }
 
-.task-row--overdue td:first-child {
-  border-left-color: var(--danger-line);
+.task-row--pending {
+  --row-bg: color-mix(in srgb, var(--pending-bg) 44%, var(--surface));
+  --row-border: color-mix(in srgb, var(--pending-line) 22%, transparent);
+  --row-rail: var(--pending-line);
 }
 
-.task-row--pending td {
-  background: linear-gradient(90deg, rgba(125, 139, 167, 0.3), rgba(125, 139, 167, 0.16));
-  border-top-color: rgba(125, 139, 167, 0.24);
-  border-bottom-color: rgba(125, 139, 167, 0.24);
+.task-row--done {
+  --row-bg: color-mix(in srgb, var(--success-bg) 42%, var(--surface));
+  --row-border: color-mix(in srgb, var(--success-line) 24%, transparent);
+  --row-rail: var(--success-line);
 }
 
-.task-row--pending td:first-child {
-  border-left-color: var(--pending-line);
-}
-
-.task-row--done td {
-  background: linear-gradient(90deg, rgba(31, 138, 76, 0.3), rgba(31, 138, 76, 0.14));
-  border-top-color: rgba(31, 138, 76, 0.26);
-  border-bottom-color: rgba(31, 138, 76, 0.26);
-}
-
-.task-row--done td:first-child {
-  border-left-color: var(--success-line);
+.task-row td + td {
+  border-left: 0;
 }
 
 .cell-input,
@@ -1913,14 +1911,14 @@ a {
 
 .task-row .cell-input,
 .task-row .cell-select {
-  background: rgba(255, 255, 255, 0.72);
-  border-color: rgba(22, 34, 58, 0.12);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border-color: color-mix(in srgb, var(--line) 88%, transparent);
 }
 
 :root[data-theme="dark"] .task-row .cell-input,
 :root[data-theme="dark"] .task-row .cell-select {
-  background: rgba(12, 18, 31, 0.72);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border-color: color-mix(in srgb, var(--line) 80%, transparent);
 }
 
 .cell-input--task {
@@ -1965,17 +1963,20 @@ a {
 
 .cell-select--low,
 .cell-select--pending {
-  background: var(--pending-bg);
+  background: color-mix(in srgb, var(--pending-bg) 92%, var(--surface));
+  border-color: color-mix(in srgb, var(--pending-line) 34%, transparent);
   color: var(--pending-text);
 }
 
 .cell-select--overdue {
-  background: var(--danger-bg);
+  background: color-mix(in srgb, var(--danger-bg) 92%, var(--surface));
+  border-color: color-mix(in srgb, var(--danger-line) 38%, transparent);
   color: var(--danger-text);
 }
 
 .cell-select--done {
-  background: var(--success-bg);
+  background: color-mix(in srgb, var(--success-bg) 92%, var(--surface));
+  border-color: color-mix(in srgb, var(--success-line) 34%, transparent);
   color: var(--success-text);
 }
 
