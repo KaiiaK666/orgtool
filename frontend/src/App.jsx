@@ -410,6 +410,18 @@ function findTaskMention(board, text) {
   return findNamedMatch(board?.tasks || [], text, "name");
 }
 
+function hasDeleteIntent(text = "") {
+  const normalized = normalizePhrase(text);
+  return (
+    /\b(?:delete|remove|clear|trash)\b/i.test(text) ||
+    /\b(?:delte|delet|dlete|remeove|remvoe|rmove)\b/.test(normalized)
+  );
+}
+
+function hasGroupIntent(text = "") {
+  return /\b(?:task\s+groups?|groups?|lanes?|sections?)\b/i.test(text);
+}
+
 function splitAssistantClauses(text = "") {
   return String(text || "")
     .split(/\s+(?:and then|then|and)\s+(?=(?:mark|set|change|move|update|add|create|new|complete|finish)\b)/i)
@@ -469,7 +481,7 @@ function parseAssistantClause(clause, board, currentUser, context = {}) {
   const fallbackGroup = context.group || null;
   const group = findGroupMention(board, workingText, fallbackGroup);
 
-  if (/\b(?:delete|remove)\b/i.test(lower) && /\b(?:task\s+groups?|groups?)\b/i.test(lower)) {
+  if (hasDeleteIntent(workingText) && (hasGroupIntent(workingText) || group?.id)) {
     if (/\ball\b/i.test(lower)) {
       const groups = board?.groups || [];
       if (groups.length) {
@@ -666,10 +678,10 @@ function buildAssistantPlan(input, board, currentUser) {
   }
 
   if (!operations.length) {
-    if (/\b(?:delete|remove)\b/i.test(input) && /\b(?:task\s+groups?|groups?)\b/i.test(input)) {
+    if (hasDeleteIntent(input) && (hasGroupIntent(input) || findGroupMention(board, input))) {
       return {
         mode: "answer",
-        message: 'I can remove task groups too. Say "delete the Natasha group" or "delete all task groups" and I will ask for confirmation before I change the board.',
+        message: 'I can remove task groups too. Try "delete Natasha", "delete the Natasha group", or "delete all task groups" and I will ask for confirmation before I change the board.',
       };
     }
 
@@ -1121,7 +1133,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
             const progress = boardProgress(board);
             const toneName = tone(boardTone(board));
             const groups = boardGroupSummary(board);
-            const visibleGroups = groups.slice(0, 3);
+            const visibleGroups = groups.slice(0, 2);
             const hiddenGroupCount = Math.max(groups.length - visibleGroups.length, 0);
             const totalTasks = board.tasks?.length || 0;
             return (
@@ -1137,7 +1149,21 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
                   <span className={cls("pill", `pill--${toneName}`)}>{boardTone(board)}</span>
                 </div>
                 <strong>{board.name}</strong>
-                <p>{board.description || "No description yet."}</p>
+                {board.description ? <p>{board.description}</p> : null}
+                <div className="project-card__stats">
+                  <span className="project-stat-pill">
+                    <b>{groups.length}</b>
+                    <span>Groups</span>
+                  </span>
+                  <span className="project-stat-pill">
+                    <b>{totalTasks}</b>
+                    <span>Tasks</span>
+                  </span>
+                  <span className="project-stat-pill">
+                    <b>{progress.percent}%</b>
+                    <span>Done</span>
+                  </span>
+                </div>
                 <div className="project-hierarchy">
                   <div className="project-hierarchy__head">
                     <small>{groups.length} task groups</small>
