@@ -4281,3 +4281,226 @@ body {
     font-size: clamp(1.55rem, 6vw, 2rem);
   }
 }
+
+/* Mobile fit pass */
+html,
+body,
+#root {
+  overflow-x: hidden;
+}
+
+.workspace-shell,
+.main-panel,
+.dashboard-view,
+.project-board,
+.settings-view,
+.topbar,
+.topbar__main,
+.topbar__meta,
+.board-hero,
+.board-hero__summary,
+.board-hero__controls,
+.task-zone,
+.group-stack,
+.group-card,
+.copilot-panel,
+.quick-login-strip,
+.panel {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.topbar h2,
+.board-hero h2,
+.group-card__meta h3 {
+  overflow-wrap: anywhere;
+}
+
+.copilot-panel__controls {
+  flex-wrap: wrap;
+}
+
+.copilot-panel__controls .ghost-button {
+  min-width: 0;
+}
+
+.copilot-thread {
+  max-height: 260px;
+  overflow: auto;
+}
+
+@media (max-width: 900px) {
+  .workspace-shell--mobile,
+  .workspace-shell--mobile .main-panel,
+  .workspace-shell--mobile .project-board,
+  .workspace-shell--mobile .dashboard-view,
+  .workspace-shell--mobile .settings-view {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  .workspace-shell--mobile .topbar {
+    gap: 8px;
+  }
+
+  .workspace-shell--mobile .topbar__main,
+  .workspace-shell--mobile .topbar__meta,
+  .workspace-shell--mobile .board-hero__summary,
+  .workspace-shell--mobile .task-zone__head {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .workspace-shell--mobile .topbar__meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    justify-content: stretch;
+  }
+
+  .workspace-shell--mobile .topbar__meta > * {
+    min-width: 0;
+  }
+
+  .workspace-shell--mobile .topbar__meta .pill {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workspace-shell--mobile .theme-toggle {
+    min-width: 0;
+    width: auto;
+  }
+
+  .workspace-shell--mobile .board-hero {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .workspace-shell--mobile .board-hero__controls {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .workspace-shell--mobile .board-hero__controls > * {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .workspace-shell--mobile .ghost-button--icon {
+    width: 42px;
+    min-width: 42px;
+    justify-self: start;
+  }
+
+  .workspace-shell--mobile .search {
+    min-width: 0;
+  }
+
+  .workspace-shell--mobile .copilot-panel {
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .workspace-shell--mobile .copilot-panel__head {
+    gap: 8px;
+  }
+
+  .workspace-shell--mobile .copilot-panel__controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .workspace-shell--mobile .copilot-panel__lead {
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+
+  .workspace-shell--mobile .copilot-panel__chips {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .workspace-shell--mobile .copilot-chip {
+    width: 100%;
+    justify-content: flex-start;
+    padding: 8px 10px;
+    font-size: 0.73rem;
+  }
+
+  .workspace-shell--mobile .copilot-bubble,
+  .workspace-shell--mobile .copilot-confirm {
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  .workspace-shell--mobile .copilot-compose {
+    gap: 8px;
+  }
+
+  .workspace-shell--mobile .copilot-compose textarea {
+    min-height: 72px;
+    padding: 10px 12px;
+  }
+
+  .workspace-shell--mobile .task-zone {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .workspace-shell--mobile .task-zone__head p {
+    font-size: 0.86rem;
+  }
+
+  .workspace-shell--mobile .group-card {
+    padding: 12px;
+  }
+
+  .workspace-shell--mobile .mobile-task-card {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .workspace-shell--mobile .mobile-task-card__grid {
+    gap: 8px;
+  }
+
+  .workspace-shell--mobile .notes-field__toolbar {
+    gap: 6px;
+  }
+}
+
+@media (max-width: 560px) {
+  .workspace-shell--mobile .main-panel {
+    padding:
+      calc(14px + env(safe-area-inset-top, 0px))
+      calc(12px + env(safe-area-inset-right, 0px))
+      calc(18px + env(safe-area-inset-bottom, 0px))
+      calc(12px + env(safe-area-inset-left, 0px));
+  }
+
+  .workspace-shell--mobile .topbar__meta {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .workspace-shell--mobile .topbar__meta .pill {
+    justify-self: start;
+    width: auto;
+    max-width: 100%;
+  }
+
+  .workspace-shell--mobile .copilot-panel__controls {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-shell--mobile .stats {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+}

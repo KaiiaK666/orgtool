@@ -1522,6 +1522,7 @@ function TaskCopilotPanel({
   onUpdateGroup,
   onDeleteGroup,
   onCreateField,
+  isMobile,
 }) {
   const [draft, setDraft] = useState("");
   const [history, setHistory] = useState([]);
@@ -1529,7 +1530,18 @@ function TaskCopilotPanel({
   const [voiceReplies, setVoiceReplies] = useState(true);
   const [listening, setListening] = useState(false);
   const [running, setRunning] = useState(false);
+  const [showExamples, setShowExamples] = useState(false);
   const recognitionRef = useRef(null);
+  const samplePrompts = [
+    "Mark all pending tasks in Queue as complete",
+    'Add note "Need artwork from Natasha" to finalize trainer schedule',
+    "Move finalize trainer schedule to tomorrow",
+    "Assign finalize trainer schedule to Miguel Castillo",
+    "Create a new task group called Natasha",
+    "Add a date column called Follow up",
+  ];
+  const visibleHistory = isMobile ? history.slice(-2) : history;
+  const showThread = !isMobile || history.length > 1 || Boolean(pendingPlan);
 
   useEffect(() => {
     setHistory([
@@ -1540,6 +1552,7 @@ function TaskCopilotPanel({
     ]);
     setPendingPlan(null);
     setDraft("");
+    setShowExamples(false);
   }, [board?.id]);
 
   useEffect(() => {
@@ -1790,6 +1803,9 @@ function TaskCopilotPanel({
         </div>
 
         <div className="copilot-panel__controls">
+          <button type="button" className={cls("ghost-button", showExamples && "ghost-button--active")} onClick={() => setShowExamples((current) => !current)}>
+            {showExamples ? "Hide examples" : "Examples"}
+          </button>
           <button type="button" className={cls("ghost-button", voiceReplies && "ghost-button--active")} onClick={() => setVoiceReplies((current) => !current)}>
             {voiceReplies ? "Spoken replies on" : "Spoken replies off"}
           </button>
@@ -1803,29 +1819,26 @@ function TaskCopilotPanel({
         Create or update projects, task groups, tasks, dates, notes, owners, and columns from one prompt.
       </p>
 
-      <div className="copilot-panel__chips">
-        {[
-          'Mark all pending tasks in Queue as complete',
-          'Add note "Need artwork from Natasha" to finalize trainer schedule',
-          "Move finalize trainer schedule to tomorrow",
-          "Assign finalize trainer schedule to Miguel Castillo",
-          "Create a new task group called Natasha",
-          "Add a date column called Follow up",
-        ].map((prompt) => (
+      {showExamples ? (
+        <div className="copilot-panel__chips">
+          {samplePrompts.map((prompt) => (
           <button key={prompt} type="button" className="copilot-chip" onClick={() => setDraft(prompt)}>
             {prompt}
           </button>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : null}
 
-      <div className="copilot-thread">
-        {history.map((entry, index) => (
+      {showThread ? (
+        <div className="copilot-thread">
+        {visibleHistory.map((entry, index) => (
           <article key={`${entry.role}-${index}`} className={cls("copilot-bubble", `copilot-bubble--${entry.role}`)}>
             <strong>{entry.role === "assistant" ? "Copilot" : "You"}</strong>
             <p>{entry.text}</p>
           </article>
         ))}
-      </div>
+        </div>
+      ) : null}
 
       {pendingPlan ? (
         <div className="copilot-confirm">
@@ -2346,6 +2359,7 @@ function ProjectBoard({
         onUpdateGroup={onUpdateGroup}
         onDeleteGroup={onDeleteGroup}
         onCreateField={onCreateField}
+        isMobile={isMobile}
       />
 
       <section className={cls("board-hero", `board-hero--${tone(boardTone(board))}`)}>
