@@ -5,7 +5,9 @@ import {
   createGroup,
   createTask,
   createUser,
+  deleteBoard,
   deleteGroup,
+  deleteTask,
   deleteUser,
   getBootstrap,
   login,
@@ -410,6 +412,19 @@ function findTaskMention(board, text) {
   return findNamedMatch(board?.tasks || [], text, "name");
 }
 
+function findBoardMention(boards, text, fallbackBoard = null) {
+  const direct = findNamedMatch(boards || [], text, "name");
+  if (direct) return direct;
+  if (fallbackBoard && /\b(this project|this board|current project|current board|this workspace|here)\b/i.test(text)) return fallbackBoard;
+  return fallbackBoard;
+}
+
+function findUserMention(users, text) {
+  const byName = findNamedMatch(users || [], text, "name");
+  if (byName) return byName;
+  return findNamedMatch(users || [], text, "username");
+}
+
 function hasDeleteIntent(text = "") {
   const normalized = normalizePhrase(text);
   return (
@@ -422,9 +437,39 @@ function hasGroupIntent(text = "") {
   return /\b(?:task\s+groups?|groups?|lanes?|sections?)\b/i.test(text);
 }
 
+function hasProjectIntent(text = "") {
+  return /\b(?:projects?|boards?|workspace)\b/i.test(text);
+}
+
+function hasColumnIntent(text = "") {
+  return /\b(?:columns?|fields?)\b/i.test(text);
+}
+
+function hasCreateIntent(text = "") {
+  return /\b(?:create|add|new)\b/i.test(text);
+}
+
+function priorityFromWord(word = "") {
+  const value = String(word || "").toLowerCase();
+  if (["critical", "high", "medium", "low"].includes(value)) return sentenceCase(value);
+  return null;
+}
+
+function extractPriorityMentions(text = "") {
+  return Array.from(String(text || "").matchAll(/\b(critical|high|medium|low)\b/gi))
+    .map((match) => priorityFromWord(match[1]))
+    .filter(Boolean);
+}
+
+function fieldTypeFromWord(word = "") {
+  const value = String(word || "").toLowerCase();
+  if (["open", "text", "date", "number", "tag"].includes(value)) return value === "open" ? "text" : value;
+  return null;
+}
+
 function splitAssistantClauses(text = "") {
   return String(text || "")
-    .split(/\s+(?:and then|then|and)\s+(?=(?:mark|set|change|move|update|add|create|new|complete|finish)\b)/i)
+    .split(/\s+(?:and then|then|and)\s+(?=(?:mark|set|change|move|update|add|create|new|complete|finish|delete|remove|rename|assign)\b)/i)
     .map((part) => part.trim())
     .filter(Boolean);
 }
@@ -475,11 +520,15 @@ function buildReadOnlyAssistantResponse(input, board, currentUser) {
   return null;
 }
 
-function parseAssistantClause(clause, board, currentUser, context = {}) {
+function parseAssistantClause(clause, board, currentUser, context = {}, workspace = {}) {
   const workingText = String(clause || "").trim();
   const lower = workingText.toLowerCase();
   const fallbackGroup = context.group || null;
+  const users = workspace.users || [];
+  const boards = workspace.boards || (board ? [board] : []);
   const group = findGroupMention(board, workingText, fallbackGroup);
+  const task = findTaskMention(board, workingText);
+  const targetBoard = findBoardMention(boards, workingText, board);
 
   if (hasDeleteIntent(workingText) && (hasGroupIntent(workingText) || group?.id)) {
     if (/\ball\b/i.test(lower)) {
@@ -601,7 +650,9 @@ function parseAssistantClause(clause, board, currentUser, context = {}) {
 
   if (/\b(?:create|add|new)\b/i.test(lower) && /\b(?:task|one)\b/i.test(lower)) {
     const targetStatus = extractStatusMentions(workingText).slice(-1)[0] || "Pending";
+    const targetPriority = extractPriorityMentions(workingText).slice(-1)[0] || "Medium";
     const explicitDate = parseNaturalDate((workingText.match(/\b(?:due|for|on)\s+([a-z0-9,/\-\s]+)$/i) || [])[1] || "");
+    const owner = findUserMention(users, workingText);
 
     let name = workingText
       .replace(/\b(?:create|add|new)\b/gi, "")
@@ -610,6 +661,7 @@ function parseAssistantClause(clause, board, currentUser, context = {}) {
       .replace(/\b(?:task|one)\b/gi, "")
       .replace(/\b(?:called|named|for)\b/gi, "")
       .replace(/\bas\s+(?:done|complete|completed|pending|open|overdue)\b/gi, "")
+      .replace(/\b(?:critical|high|medium|low)\b/gi, "")
       .replace(/\b(?:due|for|on)\s+[a-z0-9,/\-\s]+$/i, "")
       .trim();
 
@@ -626,9 +678,229 @@ function parseAssistantClause(clause, board, currentUser, context = {}) {
           name: sentenceCase(name),
           status: targetStatus,
           dueDate: explicitDate,
-          ownerId: currentUser?.id || null,
-          priority: "Medium",
+          ownerId: owner?.id ?? currentUser?.id ?? null,
+          priority: targetPriority,
           notes: "",
+        },
+        context: { group },
+      };
+    }
+  }
+
+  const assignMatch = workingText.match(/\b(?:assign|give)\s+(.+?)\s+(?:to|for)\s+(.+)$/i);
+  if (assignMatch) {
+    const assignTask = findTaskMention(board, assignMatch[1]);
+    const assignUser = findUserMention(users, assignMatch[2]);
+    if (assignTask?.id && assignUser?.id) {
+      return {
+        operation: {
+          type: "update-task",
+          taskId: assignTask.id,
+          taskName: assignTask.name,
+          changes: { owner_id: assignUser.id },
+          ownerName: assignUser.name,
+        },
+        context: { group: (board.groups || []).find((entry) => Number(entry.id) === Number(assignTask.group_id)) || group },
+      };
+    }
+  }
+
+  if (task?.id && extractPriorityMentions(workingText).length && /\b(?:priority|make|set|change|mark)\b/i.test(lower)) {
+    const nextPriority = extractPriorityMentions(workingText).slice(-1)[0];
+    if (nextPriority) {
+      return {
+        operation: {
+          type: "update-task",
+          taskId: task.id,
+          taskName: task.name,
+          changes: { priority: nextPriority },
+        },
+        context: { group: (board.groups || []).find((entry) => Number(entry.id) === Number(task.group_id)) || group },
+      };
+    }
+  }
+
+  const moveTaskMatch = workingText.match(/\b(?:move|send|put)\s+(.+?)\s+(?:to|into|under)\s+(.+)$/i);
+  if (moveTaskMatch) {
+    const movedTask = findTaskMention(board, moveTaskMatch[1]);
+    const targetGroup = findGroupMention(board, moveTaskMatch[2], group);
+    if (movedTask?.id && targetGroup?.id && Number(movedTask.group_id) !== Number(targetGroup.id)) {
+      return {
+        operation: {
+          type: "update-task",
+          taskId: movedTask.id,
+          taskName: movedTask.name,
+          changes: { group_id: targetGroup.id },
+          targetGroupName: targetGroup.name,
+        },
+        context: { group: targetGroup },
+      };
+    }
+  }
+
+  if (hasDeleteIntent(workingText) && /\ball\b/i.test(lower) && /\btasks?\b/i.test(lower)) {
+    const sourceStatus = extractStatusMentions(workingText)[0] || null;
+    const myOnly = /\b(my tasks|my task|mine|your tasks)\b/i.test(lower);
+    const matchingTasks = (board.tasks || []).filter((entry) => {
+      if (group?.id && Number(entry.group_id) !== Number(group.id)) return false;
+      if (myOnly && Number(entry.owner_id) !== Number(currentUser?.id)) return false;
+      if (sourceStatus && visualStatus(entry) !== sourceStatus && entry.status !== sourceStatus) return false;
+      return true;
+    });
+    if (matchingTasks.length) {
+      return {
+        operation: {
+          type: "bulk-delete-tasks",
+          taskIds: matchingTasks.map((entry) => entry.id),
+          taskCount: matchingTasks.length,
+          groupName: group?.name || null,
+          sourceStatus,
+        },
+        context: { group },
+      };
+    }
+  }
+
+  if (hasDeleteIntent(workingText) && task?.id) {
+    return {
+      operation: {
+        type: "delete-task",
+        taskId: task.id,
+        taskName: task.name,
+      },
+      context: { group: (board.groups || []).find((entry) => Number(entry.id) === Number(task.group_id)) || group },
+    };
+  }
+
+  const renameMatch = workingText.match(/\brename\s+(.+?)\s+to\s+["“]?(.+?)["”]?$/i);
+  if (renameMatch) {
+    const sourceText = renameMatch[1].trim();
+    const nextName = sentenceCase(renameMatch[2].trim());
+    const renameGroup = findGroupMention(board, sourceText, group);
+    const renameTask = findTaskMention(board, sourceText);
+    const renameBoard = findBoardMention(boards, sourceText, targetBoard);
+
+    if (renameGroup?.id && nextName) {
+      return {
+        operation: {
+          type: "update-group",
+          groupId: renameGroup.id,
+          groupName: renameGroup.name,
+          changes: { name: nextName },
+        },
+        context: { group: { ...renameGroup, name: nextName } },
+      };
+    }
+
+    if (renameTask?.id && nextName) {
+      return {
+        operation: {
+          type: "update-task",
+          taskId: renameTask.id,
+          taskName: renameTask.name,
+          changes: { name: nextName },
+        },
+        context: { group: (board.groups || []).find((entry) => Number(entry.id) === Number(renameTask.group_id)) || group },
+      };
+    }
+
+    if (renameBoard?.id && nextName) {
+      return {
+        operation: {
+          type: "update-board",
+          boardId: renameBoard.id,
+          boardName: renameBoard.name,
+          changes: { name: nextName },
+        },
+        context: { group: null },
+      };
+    }
+  }
+
+  const projectCreateMatch = workingText.match(/\b(?:create|add|new)\s+(?:a\s+)?(?:new\s+)?(?:project|board)(?:\s+(?:called|named))?\s+["“]?(.+?)["”]?$/i);
+  if (projectCreateMatch) {
+    const projectName = sentenceCase(projectCreateMatch[1].trim());
+    if (projectName) {
+      return {
+        operation: {
+          type: "create-board",
+          name: projectName,
+          description: "",
+          department: currentUser?.department || board?.department || "General",
+          color: board?.color || "#3156f5",
+        },
+        context: { group: null },
+      };
+    }
+  }
+
+  if (hasDeleteIntent(workingText) && hasProjectIntent(workingText) && !hasGroupIntent(workingText) && targetBoard?.id) {
+    return {
+      operation: {
+        type: "delete-board",
+        boardId: targetBoard.id,
+        boardName: targetBoard.name,
+        groupCount: (targetBoard.groups || []).length,
+        taskCount: (targetBoard.tasks || []).length,
+      },
+      context: { group: null },
+    };
+  }
+
+  const boardDescriptionMatch = workingText.match(/\b(?:set|change|update)\s+(?:the\s+)?(?:project|board)?\s*description\s+(?:to|as)\s+["“]?(.+?)["”]?$/i);
+  if (boardDescriptionMatch && targetBoard?.id) {
+    return {
+      operation: {
+        type: "update-board",
+        boardId: targetBoard.id,
+        boardName: targetBoard.name,
+        changes: { description: sentenceCase(boardDescriptionMatch[1].trim()) },
+      },
+      context: { group: null },
+    };
+  }
+
+  const boardColorMatch = workingText.match(/\b(?:set|change|update)\s+(?:the\s+)?(?:project|board)?\s*color\s+(?:to|as)\s+(#[0-9a-f]{6}|#[0-9a-f]{3})\b/i);
+  if (boardColorMatch && targetBoard?.id) {
+    return {
+      operation: {
+        type: "update-board",
+        boardId: targetBoard.id,
+        boardName: targetBoard.name,
+        changes: { color: boardColorMatch[1] },
+      },
+      context: { group: null },
+    };
+  }
+
+  const groupColorMatch = workingText.match(/\b(?:set|change|update)\s+(?:the\s+)?(?:task\s+)?group\s+(.+?)\s+color\s+(?:to|as)\s+(#[0-9a-f]{6}|#[0-9a-f]{3})\b/i);
+  if (groupColorMatch) {
+    const targetGroup = findGroupMention(board, groupColorMatch[1], group);
+    if (targetGroup?.id) {
+      return {
+        operation: {
+          type: "update-group",
+          groupId: targetGroup.id,
+          groupName: targetGroup.name,
+          changes: { color: groupColorMatch[2] },
+        },
+        context: { group: { ...targetGroup, color: groupColorMatch[2] } },
+      };
+    }
+  }
+
+  const fieldCreateMatch = workingText.match(/\b(?:create|add|new)\s+(?:a\s+)?(?:(open|text|date|number|tag)\s+)?(?:column|field)(?:\s+(?:called|named))?\s+["“]?(.+?)["”]?$/i);
+  if (fieldCreateMatch) {
+    const fieldName = sentenceCase(fieldCreateMatch[2].trim());
+    const fieldType = fieldTypeFromWord(fieldCreateMatch[1]) || fieldTypeFromWord((workingText.match(/\b(open|text|date|number|tag)\b/i) || [])[1]) || "text";
+    if (fieldName) {
+      return {
+        operation: {
+          type: "create-field",
+          boardId: board.id,
+          boardName: board.name,
+          name: fieldName,
+          fieldType,
         },
         context: { group },
       };
@@ -640,17 +912,40 @@ function parseAssistantClause(clause, board, currentUser, context = {}) {
 
 function describeAssistantOperation(operation) {
   switch (operation.type) {
+    case "create-board":
+      return `create a new project called "${operation.name}"`;
+    case "update-board":
+      if (operation.changes.name) return `rename the project "${operation.boardName}" to "${operation.changes.name}"`;
+      if (operation.changes.description !== undefined) return `update the description for "${operation.boardName}"`;
+      if (operation.changes.color) return `change the color for "${operation.boardName}"`;
+      return `update the project "${operation.boardName}"`;
+    case "delete-board":
+      return `delete the project "${operation.boardName}"${operation.groupCount ? ` with ${operation.groupCount} task group${operation.groupCount === 1 ? "" : "s"}` : ""}${operation.taskCount ? ` and ${operation.taskCount} task${operation.taskCount === 1 ? "" : "s"}` : ""}`;
     case "delete-group":
       return `delete the task group "${operation.groupName}"${operation.taskCount ? ` and its ${operation.taskCount} task${operation.taskCount === 1 ? "" : "s"}` : ""}`;
     case "bulk-delete-groups":
       return `delete all ${operation.groupCount} task groups${operation.taskCount ? ` and their ${operation.taskCount} task${operation.taskCount === 1 ? "" : "s"}` : ""}`;
     case "create-group":
       return `create a new task group called "${operation.name}"`;
+    case "update-group":
+      if (operation.changes.name) return `rename the task group "${operation.groupName}" to "${operation.changes.name}"`;
+      if (operation.changes.color) return `change the color for "${operation.groupName}"`;
+      return `update the task group "${operation.groupName}"`;
+    case "create-field":
+      return `create a new ${operation.fieldType} column called "${operation.name}"`;
     case "create-task":
       return `create a new ${operation.status} task called "${operation.name}"${operation.groupName ? ` in ${operation.groupName}` : ""}${operation.dueDate ? ` due ${formatDate(operation.dueDate)}` : ""}`;
+    case "delete-task":
+      return `delete the task "${operation.taskName}"`;
+    case "bulk-delete-tasks":
+      return `delete ${operation.taskCount} ${operation.sourceStatus ? `${operation.sourceStatus.toLowerCase()} ` : ""}task${operation.taskCount === 1 ? "" : "s"}${operation.groupName ? ` in ${operation.groupName}` : ""}`;
     case "update-task":
       if (operation.changes.status) return `mark "${operation.taskName}" as ${operation.changes.status}`;
+      if (operation.changes.group_id) return `move "${operation.taskName}" to ${operation.targetGroupName}`;
       if (operation.changes.due_date) return `change the due date for "${operation.taskName}" to ${formatDate(operation.changes.due_date)}`;
+      if (operation.changes.owner_id) return `assign "${operation.taskName}" to ${operation.ownerName || "the selected owner"}`;
+      if (operation.changes.priority) return `set the priority for "${operation.taskName}" to ${operation.changes.priority}`;
+      if (operation.changes.name) return `rename "${operation.taskName}" to "${operation.changes.name}"`;
       if (operation.changes.notes) return `add a note to "${operation.taskName}"`;
       return `update "${operation.taskName}"`;
     case "bulk-update":
@@ -660,7 +955,7 @@ function describeAssistantOperation(operation) {
   }
 }
 
-function buildAssistantPlan(input, board, currentUser) {
+function buildAssistantPlan(input, board, currentUser, workspace = {}) {
   const readOnlyResponse = buildReadOnlyAssistantResponse(input, board, currentUser);
   if (readOnlyResponse) {
     return { mode: "answer", message: readOnlyResponse };
@@ -671,7 +966,7 @@ function buildAssistantPlan(input, board, currentUser) {
   let context = { group: null };
 
   for (const clause of clauses) {
-    const parsed = parseAssistantClause(clause, board, currentUser, context);
+    const parsed = parseAssistantClause(clause, board, currentUser, context, workspace);
     if (!parsed?.operation) continue;
     operations.push(parsed.operation);
     context = { ...context, ...(parsed.context || {}) };
@@ -688,7 +983,7 @@ function buildAssistantPlan(input, board, currentUser) {
     return {
       mode: "answer",
       message:
-        'I can change the real task list from here. Try "mark all my pending tasks in Queue as complete", "add note \\"Call printer today\\" to finalize trainer schedule", "move finalize trainer schedule to tomorrow", "create a new task group called Natasha", or "delete all task groups".',
+        'I can edit the real workspace from here. Try "create a new project called Summer Push", "rename this project to Trainer Roadmap", "assign finalize trainer schedule to Miguel Castillo", "move finalize trainer schedule to Queue", "add a date column called Follow up", or "delete all done tasks in Queue".',
     };
   }
 
@@ -1133,7 +1428,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
             const progress = boardProgress(board);
             const toneName = tone(boardTone(board));
             const groups = boardGroupSummary(board);
-            const visibleGroups = groups.slice(0, 2);
+            const visibleGroups = groups.slice(0, 3);
             const hiddenGroupCount = Math.max(groups.length - visibleGroups.length, 0);
             const totalTasks = board.tasks?.length || 0;
             return (
@@ -1149,21 +1444,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
                   <span className={cls("pill", `pill--${toneName}`)}>{boardTone(board)}</span>
                 </div>
                 <strong>{board.name}</strong>
-                {board.description ? <p>{board.description}</p> : null}
-                <div className="project-card__stats">
-                  <span className="project-stat-pill">
-                    <b>{groups.length}</b>
-                    <span>Groups</span>
-                  </span>
-                  <span className="project-stat-pill">
-                    <b>{totalTasks}</b>
-                    <span>Tasks</span>
-                  </span>
-                  <span className="project-stat-pill">
-                    <b>{progress.percent}%</b>
-                    <span>Done</span>
-                  </span>
-                </div>
+                <p>{board.description || "No description yet."}</p>
                 <div className="project-hierarchy">
                   <div className="project-hierarchy__head">
                     <small>{groups.length} task groups</small>
@@ -1215,7 +1496,21 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
   );
 }
 
-function TaskCopilotPanel({ board, currentUser, onCreateTask, onUpdateTask, onCreateGroup, onDeleteGroup }) {
+function TaskCopilotPanel({
+  board,
+  currentUser,
+  users,
+  onCreateTask,
+  onUpdateTask,
+  onDeleteTask,
+  onCreateBoard,
+  onUpdateBoard,
+  onDeleteBoard,
+  onCreateGroup,
+  onUpdateGroup,
+  onDeleteGroup,
+  onCreateField,
+}) {
   const [draft, setDraft] = useState("");
   const [history, setHistory] = useState([]);
   const [pendingPlan, setPendingPlan] = useState(null);
@@ -1228,7 +1523,7 @@ function TaskCopilotPanel({ board, currentUser, onCreateTask, onUpdateTask, onCr
     setHistory([
       {
         role: "assistant",
-        text: `I'm watching ${board?.name || "this board"}. Ask me to create tasks, mark work complete, add notes, change due dates, delete task groups, or create new ones. I will always ask before I change anything.`,
+        text: `I'm watching ${board?.name || "this board"}. You can talk to me like an operator: create projects, rename boards, add or delete task groups, create or move tasks, change owners, priorities, notes, due dates, or add columns. I will always ask before I change anything.`,
       },
     ]);
     setPendingPlan(null);
@@ -1276,6 +1571,33 @@ function TaskCopilotPanel({ board, currentUser, onCreateTask, onUpdateTask, onCr
       const results = [];
 
       for (const operation of plan.operations) {
+        if (operation.type === "create-board") {
+          const nextBoard = await onCreateBoard({
+            name: operation.name,
+            description: operation.description || "",
+            department: operation.department || currentUser?.department || "General",
+            color: operation.color || board.color || "#3156f5",
+          });
+          if (nextBoard) {
+            results.push(`Created project "${nextBoard.name}".`);
+          }
+          continue;
+        }
+
+        if (operation.type === "update-board") {
+          await onUpdateBoard(operation.changes, operation.boardId);
+          results.push(`Updated project "${operation.boardName}".`);
+          continue;
+        }
+
+        if (operation.type === "delete-board") {
+          const result = await onDeleteBoard(operation.boardId);
+          if (result?.deleted) {
+            results.push(`Deleted project "${operation.boardName}".`);
+          }
+          continue;
+        }
+
         if (operation.type === "delete-group") {
           const result = await onDeleteGroup(operation.groupId);
           if (result?.deleted) {
@@ -1306,6 +1628,21 @@ function TaskCopilotPanel({ board, currentUser, onCreateTask, onUpdateTask, onCr
           continue;
         }
 
+        if (operation.type === "update-group") {
+          await onUpdateGroup(operation.groupId, operation.changes);
+          results.push(`Updated task group "${operation.groupName}".`);
+          continue;
+        }
+
+        if (operation.type === "create-field") {
+          await onCreateField({
+            name: operation.name,
+            type: operation.fieldType,
+          });
+          results.push(`Created ${operation.fieldType} column "${operation.name}".`);
+          continue;
+        }
+
         if (operation.type === "create-task") {
           const targetGroup =
             (operation.groupId && (board.groups || []).find((entry) => Number(entry.id) === Number(operation.groupId))) ||
@@ -1323,6 +1660,22 @@ function TaskCopilotPanel({ board, currentUser, onCreateTask, onUpdateTask, onCr
           });
           activeGroup = targetGroup;
           results.push(`Created "${task?.name || operation.name}" in ${targetGroup.name}.`);
+          continue;
+        }
+
+        if (operation.type === "delete-task") {
+          const result = await onDeleteTask(operation.taskId);
+          if (result?.deleted) {
+            results.push(`Deleted "${operation.taskName}".`);
+          }
+          continue;
+        }
+
+        if (operation.type === "bulk-delete-tasks") {
+          for (const taskId of operation.taskIds || []) {
+            await onDeleteTask(taskId);
+          }
+          results.push(`Deleted ${operation.taskCount} task${operation.taskCount === 1 ? "" : "s"}${operation.groupName ? ` in ${operation.groupName}` : ""}.`);
           continue;
         }
 
@@ -1367,7 +1720,7 @@ function TaskCopilotPanel({ board, currentUser, onCreateTask, onUpdateTask, onCr
       return;
     }
 
-    const plan = buildAssistantPlan(message, board, currentUser);
+    const plan = buildAssistantPlan(message, board, currentUser, { users });
     if (plan.mode === "proposal") {
       setPendingPlan(plan);
       reply(plan.message);
@@ -1435,7 +1788,7 @@ function TaskCopilotPanel({ board, currentUser, onCreateTask, onUpdateTask, onCr
       </div>
 
       <p className="copilot-panel__lead">
-        Ask me to create tasks, update notes, move due dates, mark work complete, delete task groups, or create new ones. I always ask before I change the real board.
+        Talk to me like an operator. I can edit projects, task groups, tasks, columns, owners, priorities, notes, and due dates. I always ask before I change the real workspace.
       </p>
 
       <div className="copilot-panel__chips">
@@ -1443,7 +1796,11 @@ function TaskCopilotPanel({ board, currentUser, onCreateTask, onUpdateTask, onCr
           'Mark all my pending tasks in Queue as complete',
           'Add note "Need artwork from Natasha" to finalize trainer schedule',
           "Move finalize trainer schedule to tomorrow",
+          "Assign finalize trainer schedule to Miguel Castillo",
+          "Create a new project called Summer Push",
+          "Rename this project to Leadership Roadmap",
           "Create a new task group called Natasha",
+          "Add a date column called Follow up",
           "Add a new task called create flyer in Queue as pending",
           "Delete all task groups",
         ].map((prompt) => (
@@ -1481,7 +1838,7 @@ function TaskCopilotPanel({ board, currentUser, onCreateTask, onUpdateTask, onCr
         <textarea
           rows={3}
           value={draft}
-          placeholder='Example: "Say yes if you want me to mark all my pending tasks in Queue as complete and create a new task called Create flyer as pending."'
+          placeholder='Example: "Mark all my pending tasks in Queue as complete and create a new task called Create flyer as pending."'
           onChange={(event) => setDraft(event.target.value)}
         />
         <button type="submit" disabled={!draft.trim() || running}>
@@ -1771,10 +2128,13 @@ function ProjectBoard({
   currentUser,
   users,
   onUpdateTask,
+  onDeleteTask,
   onCreateTask,
+  onCreateBoard,
+  onDeleteBoard,
   onCreateGroup,
-  onDeleteGroup,
   onUpdateGroup,
+  onDeleteGroup,
   onCreateField,
   onUpdateBoard,
   isMobile,
@@ -1965,10 +2325,17 @@ function ProjectBoard({
       <TaskCopilotPanel
         board={board}
         currentUser={currentUser}
+        users={users}
         onCreateTask={onCreateTask}
         onUpdateTask={onUpdateTask}
+        onDeleteTask={onDeleteTask}
+        onCreateBoard={onCreateBoard}
+        onUpdateBoard={onUpdateBoard}
+        onDeleteBoard={onDeleteBoard}
         onCreateGroup={onCreateGroup}
+        onUpdateGroup={onUpdateGroup}
         onDeleteGroup={onDeleteGroup}
+        onCreateField={onCreateField}
       />
 
       <section className={cls("board-hero", `board-hero--${tone(boardTone(board))}`)}>
@@ -2794,39 +3161,86 @@ export default function App() {
     }));
   }
 
-  async function handleCreateProject(event) {
-    event.preventDefault();
-    const name = projectForm.name.trim();
-    if (!name) return;
-    setBusy("create-project");
+  async function handleCreateBoard(payload, options = {}) {
+    const { openBoard = false, busyKey = "create-project" } = options;
+    setBusy(busyKey);
     setError("");
     try {
       const board = await createBoard({
-        ...projectForm,
-        name,
+        ...payload,
+        name: String(payload.name || "").trim(),
+        description: String(payload.description || "").trim(),
         store_id: null,
       });
       setData((current) => ({ ...current, boards: [...current.boards, board] }));
-      setSelectedBoardId(board.id);
-      setShowProjectForm(false);
-      setProjectForm(blankProject(currentUser));
-      setPage("project");
+      if (openBoard) {
+        setSelectedBoardId(board.id);
+        setPage("project");
+      }
+      return board;
     } catch (submitError) {
       setError(submitError.message || "Unable to create project");
+      return null;
     } finally {
       setBusy("");
     }
   }
 
-  async function handleUpdateBoard(changes) {
-    if (!activeBoard) return;
+  async function handleCreateProject(event) {
+    event.preventDefault();
+    const name = projectForm.name.trim();
+    if (!name) return;
+    const board = await handleCreateBoard(
+      {
+        ...projectForm,
+        name,
+      },
+      { openBoard: true, busyKey: "create-project" }
+    );
+    if (board) {
+      setShowProjectForm(false);
+      setProjectForm(blankProject(currentUser));
+    }
+  }
+
+  async function handleUpdateBoard(changes, boardId = activeBoard?.id) {
+    if (!boardId) return null;
     setBusy("save-board");
     setError("");
     try {
-      const updated = await updateBoard(activeBoard.id, changes);
-      mutateBoard(activeBoard.id, (board) => ({ ...board, ...updated }));
+      const updated = await updateBoard(boardId, changes);
+      mutateBoard(boardId, (board) => ({ ...board, ...updated }));
+      return updated;
     } catch (submitError) {
       setError(submitError.message || "Unable to update project");
+      return null;
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function handleDeleteBoard(boardId) {
+    const targetBoardId = Number(boardId);
+    if (!targetBoardId) return null;
+    setBusy(`delete-board-${targetBoardId}`);
+    setError("");
+    try {
+      const result = await deleteBoard(targetBoardId);
+      const remainingBoards = data.boards.filter((board) => Number(board.id) !== targetBoardId);
+      setData((current) => ({
+        ...current,
+        boards: current.boards.filter((board) => Number(board.id) !== targetBoardId),
+      }));
+
+      if (Number(selectedBoardId) === targetBoardId) {
+        const nextBoard = relevantBoards(remainingBoards, currentUser)[0] || null;
+        setSelectedBoardId(nextBoard?.id || null);
+        setPage(nextBoard ? "project" : "dashboard");
+      }
+      return result;
+    } catch (submitError) {
+      setError(submitError.message || "Unable to delete project");
+      return null;
     } finally {
       setBusy("");
     }
@@ -2948,6 +3362,25 @@ export default function App() {
     } catch (submitError) {
       setError(submitError.message || "Unable to update task");
       return null;
+    }
+  }
+
+  async function handleDeleteTask(taskId) {
+    if (!activeBoard) return null;
+    setBusy(`delete-task-${taskId}`);
+    setError("");
+    try {
+      const result = await deleteTask(activeBoard.id, taskId);
+      mutateBoard(activeBoard.id, (board) => ({
+        ...board,
+        tasks: board.tasks.filter((task) => Number(task.id) !== Number(taskId)),
+      }));
+      return result;
+    } catch (submitError) {
+      setError(submitError.message || "Unable to delete task");
+      return null;
+    } finally {
+      setBusy("");
     }
   }
 
@@ -3214,7 +3647,10 @@ export default function App() {
             currentUser={currentUser}
             users={data.users.filter((user) => user.active !== false)}
             onUpdateTask={handleUpdateTask}
+            onDeleteTask={handleDeleteTask}
             onCreateTask={handleCreateTask}
+            onCreateBoard={handleCreateBoard}
+            onDeleteBoard={handleDeleteBoard}
             onCreateGroup={handleCreateGroup}
             onDeleteGroup={handleDeleteGroup}
             onUpdateGroup={handleUpdateGroup}

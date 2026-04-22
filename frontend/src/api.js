@@ -92,6 +92,10 @@ export function updateBoard(boardId, payload) {
   return request(`/api/boards/${boardId}`, { method: "PATCH", body: JSON.stringify(payload) }).then(unwrap("board"));
 }
 
+export function deleteBoard(boardId) {
+  return request(`/api/boards/${boardId}`, { method: "DELETE" });
+}
+
 export function createBoardField(boardId, payload) {
   return request(`/api/boards/${boardId}/fields`, { method: "POST", body: JSON.stringify(payload) }).then(unwrap("field"));
 }
@@ -119,4 +123,8 @@ export function createTask(payload) {
 
 export function updateTask(boardId, taskId, payload) {
   return request(`/api/boards/${boardId}/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) }).then(unwrap("task"));
+}
+
+export function deleteTask(boardId, taskId) {
+  return request(`/api/boards/${boardId}/tasks/${taskId}`, { method: "DELETE" });
 }
