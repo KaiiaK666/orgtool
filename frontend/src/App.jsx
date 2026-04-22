@@ -167,6 +167,17 @@ function initials(name = "") {
     .toUpperCase();
 }
 
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <path
+        d="M11.6 1.4a1.5 1.5 0 0 1 2.1 0l.9.9a1.5 1.5 0 0 1 0 2.1L5.5 13.5 2 14l.5-3.5 9.1-9.1Zm1.4 1.3a.5.5 0 0 0-.7 0l-.8.8 1.4 1.4.8-.8a.5.5 0 0 0 0-.7l-.7-.7ZM11.2 5 3.4 12.8l-.2 1.1 1.1-.2L12 5.9 11.2 5Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 function priorityScore(priority) {
   return { Critical: 4, High: 3, Medium: 2, Low: 1 }[priority] || 0;
 }
@@ -1257,7 +1268,7 @@ function LoginScreen({
             <img className="brand-mark" src={LOGO_SRC} alt="Organization Tool logo" />
             <div>
               <span className="eyebrow">Organization Tool</span>
-              <strong>Workspace sign in</strong>
+              <strong>Dealer workflow</strong>
             </div>
           </div>
           <ThemeToggle theme={theme} onToggle={onToggleTheme} compact />
@@ -1266,10 +1277,10 @@ function LoginScreen({
         <section className="login-shell__card">
           <div className="login-shell__intro">
             <div>
-              <span className="eyebrow">Sign in</span>
-              <h1>Dealership organizational tool</h1>
+              <span className="eyebrow">Workspace</span>
+              <h1>Sign in</h1>
             </div>
-            <p>Use your username and password to open your workspace.</p>
+            <p>Use your username and password to continue.</p>
           </div>
 
           <form className="login-form" onSubmit={onSubmit}>
@@ -1365,7 +1376,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
           <div className="panel__head">
             <div>
               <span className="eyebrow">My work</span>
-              <h3>What needs attention</h3>
+              <h3>Due soon</h3>
             </div>
           </div>
           <div className="activity-list">
@@ -1394,7 +1405,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
           <div className="panel__head">
             <div>
               <span className="eyebrow">Pinned</span>
-              <h3>Keep the board clean</h3>
+              <h3>Pinned notes</h3>
             </div>
           </div>
           <div className="notice-stack">
@@ -1420,7 +1431,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
         <div className="panel__head">
           <div>
             <span className="eyebrow">Projects</span>
-            <h3>Your boards</h3>
+            <h3>Boards</h3>
           </div>
         </div>
         <div className="project-grid project-grid--dashboard">
@@ -1444,7 +1455,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
                   <span className={cls("pill", `pill--${toneName}`)}>{boardTone(board)}</span>
                 </div>
                 <strong>{board.name}</strong>
-                <p>{board.description || "No description yet."}</p>
+                <p>{board.description || "No summary yet."}</p>
                 <div className="project-hierarchy">
                   <div className="project-hierarchy__head">
                     <small>{groups.length} task groups</small>
@@ -1524,7 +1535,7 @@ function TaskCopilotPanel({
     setHistory([
       {
         role: "assistant",
-        text: `I'm watching ${board?.name || "this board"}. You can talk to me like an operator: create projects, rename boards, add or delete task groups, create or move tasks, change owners, priorities, notes, due dates, or add columns. I will always ask before I change anything.`,
+        text: `I'm watching ${board?.name || "this board"}. Tell me what to change and I'll ask before I edit the real board.`,
       },
     ]);
     setPendingPlan(null);
@@ -1774,8 +1785,8 @@ function TaskCopilotPanel({
     <section className="panel copilot-panel">
       <div className="copilot-panel__head">
         <div>
-          <span className="eyebrow">Task copilot</span>
-          <h3>Talk to your board</h3>
+          <span className="eyebrow">AI</span>
+          <h3>Copilot</h3>
         </div>
 
         <div className="copilot-panel__controls">
@@ -1789,21 +1800,17 @@ function TaskCopilotPanel({
       </div>
 
       <p className="copilot-panel__lead">
-        Talk to me like an operator. I can edit projects, task groups, tasks, columns, owners, priorities, notes, and due dates. I always ask before I change the real workspace.
+        Create or update projects, task groups, tasks, dates, notes, owners, and columns from one prompt.
       </p>
 
       <div className="copilot-panel__chips">
         {[
-          'Mark all my pending tasks in Queue as complete',
+          'Mark all pending tasks in Queue as complete',
           'Add note "Need artwork from Natasha" to finalize trainer schedule',
           "Move finalize trainer schedule to tomorrow",
           "Assign finalize trainer schedule to Miguel Castillo",
-          "Create a new project called Summer Push",
-          "Rename this project to Leadership Roadmap",
           "Create a new task group called Natasha",
           "Add a date column called Follow up",
-          "Add a new task called create flyer in Queue as pending",
-          "Delete all task groups",
         ].map((prompt) => (
           <button key={prompt} type="button" className="copilot-chip" onClick={() => setDraft(prompt)}>
             {prompt}
@@ -1839,7 +1846,7 @@ function TaskCopilotPanel({
         <textarea
           rows={3}
           value={draft}
-          placeholder='Example: "Mark all my pending tasks in Queue as complete and create a new task called Create flyer as pending."'
+          placeholder='Example: "Move finalize trainer schedule to tomorrow."'
           onChange={(event) => setDraft(event.target.value)}
         />
         <button type="submit" disabled={!draft.trim() || running}>
@@ -2345,7 +2352,7 @@ function ProjectBoard({
         <div className="board-hero__summary">
           <span className="eyebrow">{board.department}</span>
           <h2>{board.name}</h2>
-          <p>{board.description || "Simple board for task groups, due dates, notes, and priority."}</p>
+          <p>{board.description || "Tasks, dates, notes, and owners in one place."}</p>
         </div>
 
         <div className="board-hero__controls">
@@ -2362,7 +2369,7 @@ function ProjectBoard({
             title={showBoardEditor ? "Close project editor" : "Edit project"}
             onClick={() => setShowBoardEditor((current) => !current)}
           >
-            ✎
+            <PencilIcon />
           </button>
 
           <button type="button" className="plus-button" onClick={() => setShowColumnForm((current) => !current)}>
@@ -2452,9 +2459,9 @@ function ProjectBoard({
         <div className="task-zone__head">
           <div>
             <span className="eyebrow">Task groups</span>
-            <h3>Live tasking area</h3>
+            <h3>Task groups</h3>
           </div>
-          <p>Collapse groups when you want a tighter view, then expand only the section you need to work in.</p>
+          <p>Open the group you need and keep the rest collapsed.</p>
         </div>
 
         <div className="group-stack">
@@ -3481,10 +3488,10 @@ export default function App() {
   const pageTitle = page === "dashboard" ? "Dashboard" : page === "project" ? activeBoard?.name || "Projects" : "Admin";
   const pageCopy =
     page === "dashboard"
-      ? "Projects, priorities, due dates, and notes in one place."
+      ? "Boards, tasks, dates, and notes."
       : page === "project"
-        ? "Edit the board directly, color the task groups, and let the status bars do the scanning for you."
-        : "Manage users, usernames, passwords, access, and preview mode.";
+        ? "Edit the board directly."
+        : "Users, access, and preview mode.";
 
   return (
     <div className={cls("workspace-shell", isMobile && "workspace-shell--mobile")}>
