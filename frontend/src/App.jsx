@@ -1498,6 +1498,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
 
 function TaskCopilotPanel({
   board,
+  boards,
   currentUser,
   users,
   onCreateTask,
@@ -1720,7 +1721,7 @@ function TaskCopilotPanel({
       return;
     }
 
-    const plan = buildAssistantPlan(message, board, currentUser, { users });
+    const plan = buildAssistantPlan(message, board, currentUser, { users, boards });
     if (plan.mode === "proposal") {
       setPendingPlan(plan);
       reply(plan.message);
@@ -2125,6 +2126,7 @@ function MobileTaskCard({ task, board, users, onUpdateTask }) {
 
 function ProjectBoard({
   board,
+  boards,
   currentUser,
   users,
   onUpdateTask,
@@ -2324,6 +2326,7 @@ function ProjectBoard({
     <div className="project-board">
       <TaskCopilotPanel
         board={board}
+        boards={boards}
         currentUser={currentUser}
         users={users}
         onCreateTask={onCreateTask}
@@ -3644,6 +3647,7 @@ export default function App() {
         {page === "project" ? (
           <ProjectBoard
             board={activeBoard}
+            boards={visibleBoards}
             currentUser={currentUser}
             users={data.users.filter((user) => user.active !== false)}
             onUpdateTask={handleUpdateTask}
