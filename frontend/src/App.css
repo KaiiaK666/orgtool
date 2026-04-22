@@ -4289,6 +4289,10 @@ body,
   overflow-x: hidden;
 }
 
+body {
+  width: 100%;
+}
+
 .workspace-shell,
 .main-panel,
 .dashboard-view,
@@ -4336,7 +4340,28 @@ body,
   .workspace-shell--mobile .dashboard-view,
   .workspace-shell--mobile .settings-view {
     width: 100%;
-    overflow-x: hidden;
+    max-width: 100vw;
+    overflow-x: clip;
+  }
+
+  .workspace-shell--mobile {
+    width: 100vw;
+    max-width: 100vw;
+  }
+
+  .workspace-shell--mobile .main-panel,
+  .workspace-shell--mobile .topbar,
+  .workspace-shell--mobile .topbar__main,
+  .workspace-shell--mobile .topbar__main > div,
+  .workspace-shell--mobile .topbar__meta,
+  .workspace-shell--mobile .board-hero,
+  .workspace-shell--mobile .task-zone,
+  .workspace-shell--mobile .copilot-panel,
+  .workspace-shell--mobile .group-card,
+  .workspace-shell--mobile .project-card,
+  .workspace-shell--mobile .panel {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .workspace-shell--mobile .topbar {
@@ -4352,26 +4377,26 @@ body,
   }
 
   .workspace-shell--mobile .topbar__meta {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-    justify-content: stretch;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
   }
 
   .workspace-shell--mobile .topbar__meta > * {
     min-width: 0;
+    max-width: 100%;
   }
 
   .workspace-shell--mobile .topbar__meta .pill {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
 
   .workspace-shell--mobile .theme-toggle {
     min-width: 0;
     width: auto;
+    flex: 0 1 auto;
   }
 
   .workspace-shell--mobile .board-hero {
@@ -4406,12 +4431,13 @@ body,
   }
 
   .workspace-shell--mobile .copilot-panel__head {
+    display: grid;
     gap: 8px;
   }
 
   .workspace-shell--mobile .copilot-panel__controls {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 8px;
   }
 
@@ -4485,7 +4511,6 @@ body,
   }
 
   .workspace-shell--mobile .topbar__meta {
-    grid-template-columns: 1fr;
     gap: 6px;
   }
 
@@ -4493,10 +4518,6 @@ body,
     justify-self: start;
     width: auto;
     max-width: 100%;
-  }
-
-  .workspace-shell--mobile .copilot-panel__controls {
-    grid-template-columns: 1fr;
   }
 
   .workspace-shell--mobile .stats {

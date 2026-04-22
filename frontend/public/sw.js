@@ -1,4 +1,4 @@
-const CACHE_NAME = "orgtool-shell-v1";
+const CACHE_NAME = "orgtool-shell-v2";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/organization-tool-mark.png"];
 
 self.addEventListener("install", (event) => {
@@ -40,15 +40,13 @@ self.addEventListener("fetch", (event) => {
 
   if (/\.(?:css|js|png|svg|ico|jpg|jpeg|webp|woff2?)$/i.test(requestUrl.pathname)) {
     event.respondWith(
-      caches.match(event.request).then(
-        (cached) =>
-          cached ||
-          fetch(event.request).then((response) => {
-            const responseCopy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseCopy));
-            return response;
-          })
-      )
+      fetch(event.request)
+        .then((response) => {
+          const responseCopy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseCopy));
+          return response;
+        })
+        .catch(async () => (await caches.match(event.request)) || caches.match("/"))
     );
   }
 });

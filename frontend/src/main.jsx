@@ -5,7 +5,13 @@ import "./App.css";
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
+    navigator.serviceWorker.register("/sw.js").then(() => {
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (window.__orgtoolReloading) return;
+        window.__orgtoolReloading = true;
+        window.location.reload();
+      });
+    }).catch(() => {});
   });
 }
 
