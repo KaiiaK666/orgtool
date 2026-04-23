@@ -1857,13 +1857,13 @@ function TaskCopilotPanel({
 
       <form className="copilot-compose" onSubmit={handleSubmit}>
         <textarea
-          rows={3}
+          rows={isMobile ? 2 : 3}
           value={draft}
-          placeholder='Example: "Move finalize trainer schedule to tomorrow."'
+          placeholder={isMobile ? 'Example: "Move trainer schedule to tomorrow."' : 'Example: "Move finalize trainer schedule to tomorrow."'}
           onChange={(event) => setDraft(event.target.value)}
         />
         <button type="submit" disabled={!draft.trim() || running}>
-          {running ? "Working..." : "Send to copilot"}
+          {running ? "Working..." : isMobile ? "Send" : "Send to copilot"}
         </button>
       </form>
     </section>
@@ -2370,10 +2370,10 @@ function ProjectBoard({
         </div>
 
         <div className="board-hero__controls">
-          <input className="search" placeholder="Search tasks or notes" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <input className="search" placeholder={isMobile ? "Search" : "Search tasks or notes"} value={search} onChange={(event) => setSearch(event.target.value)} />
 
           <button type="button" className={cls("toggle-chip", mineOnly && "is-active")} onClick={() => setMineOnly((current) => !current)}>
-            {mineOnly ? "Only mine" : "All tasks"}
+            {mineOnly ? (isMobile ? "Mine" : "Only mine") : isMobile ? "All" : "All tasks"}
           </button>
 
           <button
@@ -2387,7 +2387,7 @@ function ProjectBoard({
           </button>
 
           <button type="button" className="plus-button" onClick={() => setShowColumnForm((current) => !current)}>
-            {showColumnForm ? "Close columns" : "+ Add Column"}
+            {showColumnForm ? (isMobile ? "Columns" : "Close columns") : isMobile ? "+ Column" : "+ Add Column"}
           </button>
         </div>
       </section>
@@ -2519,7 +2519,7 @@ function ProjectBoard({
                 <div className="group-card__actions">
                   <div className="group-card__swatch" style={{ "--group-swatch": group.color || board.color || "#3156f5" }} />
                   <button type="button" className={cls("ghost-button", editingGroupId === group.id && "ghost-button--active")} onClick={() => openGroupEditor(group)}>
-                    {editingGroupId === group.id ? "Editing group" : "Edit group"}
+                    {editingGroupId === group.id ? (isMobile ? "Editing" : "Editing group") : isMobile ? "Edit" : "Edit group"}
                   </button>
                 </div>
               </div>
@@ -3502,10 +3502,16 @@ export default function App() {
   const pageTitle = page === "dashboard" ? "Dashboard" : page === "project" ? activeBoard?.name || "Projects" : "Admin";
   const pageCopy =
     page === "dashboard"
-      ? "Boards, tasks, dates, and notes."
+      ? isMobile
+        ? "Boards and tasks."
+        : "Boards, tasks, dates, and notes."
       : page === "project"
-        ? "Edit the board directly."
-        : "Users, access, and preview mode.";
+        ? isMobile
+          ? "Edit the board."
+          : "Edit the board directly."
+        : isMobile
+          ? "Users and access."
+          : "Users, access, and preview mode.";
 
   return (
     <div className={cls("workspace-shell", isMobile && "workspace-shell--mobile")}>
