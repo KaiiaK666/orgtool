@@ -1439,7 +1439,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
             const progress = boardProgress(board);
             const toneName = tone(boardTone(board));
             const groups = boardGroupSummary(board);
-            const visibleGroups = groups.slice(0, 3);
+            const visibleGroups = groups.slice(0, 2);
             const hiddenGroupCount = Math.max(groups.length - visibleGroups.length, 0);
             const totalTasks = board.tasks?.length || 0;
             return (
@@ -1455,7 +1455,21 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
                   <span className={cls("pill", `pill--${toneName}`)}>{boardTone(board)}</span>
                 </div>
                 <strong>{board.name}</strong>
-                <p>{board.description || "No summary yet."}</p>
+                {board.description ? <p>{board.description}</p> : null}
+                <div className="project-card__stats">
+                  <span className="project-stat-pill">
+                    <b>{groups.length}</b>
+                    <span>Groups</span>
+                  </span>
+                  <span className="project-stat-pill">
+                    <b>{totalTasks}</b>
+                    <span>Tasks</span>
+                  </span>
+                  <span className="project-stat-pill">
+                    <b>{progress.percent}%</b>
+                    <span>Done</span>
+                  </span>
+                </div>
                 <div className="project-hierarchy">
                   <div className="project-hierarchy__head">
                     <small>{groups.length} task groups</small>
