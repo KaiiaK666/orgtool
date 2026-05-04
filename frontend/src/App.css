@@ -5017,3 +5017,22 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* iOS zoom guard */
+@media (max-width: 900px) {
+  .login-screen input,
+  .login-screen select,
+  .login-screen textarea,
+  .workspace-shell--mobile input,
+  .workspace-shell--mobile select,
+  .workspace-shell--mobile textarea {
+    font-size: 16px !important;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .login-screen input,
+  .workspace-shell--mobile input,
+  .workspace-shell--mobile select {
+    min-height: 44px;
+  }
+}
