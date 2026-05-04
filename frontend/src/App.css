@@ -4733,3 +4733,287 @@ body {
     border-radius: 14px;
   }
 }
+
+/* Final phone and login reset */
+.login-screen {
+  min-height: 100svh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding:
+    calc(18px + env(safe-area-inset-top, 0px))
+    calc(16px + env(safe-area-inset-right, 0px))
+    calc(18px + env(safe-area-inset-bottom, 0px))
+    calc(16px + env(safe-area-inset-left, 0px));
+  background: var(--bg);
+}
+
+.login-shell {
+  width: min(380px, 100%);
+  display: grid;
+  gap: 10px;
+}
+
+.login-shell__topbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.login-shell__card {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.login-shell__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.login-shell__brand .brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+}
+
+.login-shell__brand strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.98rem;
+  line-height: 1.1;
+}
+
+.login-shell__brand span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.login-shell__intro {
+  display: grid;
+  gap: 4px;
+}
+
+.login-shell__intro h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.65rem;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.login-shell__intro p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.94rem;
+  line-height: 1.4;
+}
+
+.login-form {
+  display: grid;
+  gap: 10px;
+}
+
+.login-form label {
+  display: grid;
+  gap: 5px;
+}
+
+.login-form label > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.login-form input {
+  width: 100%;
+  min-height: 42px;
+  border-radius: 8px;
+}
+
+.login-form button {
+  width: 100%;
+  min-height: 42px;
+  border-radius: 8px;
+}
+
+.quick-login-strip {
+  display: grid;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.quick-login-strip__head {
+  display: flex;
+  align-items: center;
+}
+
+.quick-login-strip__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.quick-login-user {
+  min-height: 34px;
+  padding: 7px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.quick-login-user small {
+  display: none;
+}
+
+.quick-login-user__name {
+  font-size: 0.8rem;
+  line-height: 1.1;
+}
+
+.login-shell__footer {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.login-shell__footer .ghost-button {
+  flex: 1 1 0;
+  min-height: 38px;
+  border-radius: 8px;
+}
+
+@media (max-width: 900px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    min-width: 0;
+  }
+
+  .workspace-shell.workspace-shell--mobile {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .workspace-shell--mobile > .main-panel {
+    grid-column: 1 / -1;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+    padding:
+      calc(10px + env(safe-area-inset-top, 0px))
+      calc(10px + env(safe-area-inset-right, 0px))
+      calc(14px + env(safe-area-inset-bottom, 0px))
+      calc(10px + env(safe-area-inset-left, 0px));
+  }
+
+  .workspace-shell--mobile .sidebar--mobile {
+    position: fixed;
+  }
+
+  .workspace-shell--mobile .topbar,
+  .workspace-shell--mobile .dashboard-view,
+  .workspace-shell--mobile .stats,
+  .workspace-shell--mobile .dashboard-grid,
+  .workspace-shell--mobile .project-grid,
+  .workspace-shell--mobile .panel,
+  .workspace-shell--mobile .project-card,
+  .workspace-shell--mobile .task-zone,
+  .workspace-shell--mobile .group-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .workspace-shell--mobile .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .workspace-shell--mobile .topbar__main {
+    min-width: 0;
+  }
+
+  .workspace-shell--mobile .topbar h2 {
+    font-size: 1.55rem;
+    line-height: 1.05;
+  }
+
+  .workspace-shell--mobile .topbar__meta {
+    width: 100%;
+    display: flex;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+
+  .workspace-shell--mobile .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .workspace-shell--mobile .stat-card {
+    min-width: 0;
+    padding: 10px;
+    border-radius: 8px;
+  }
+
+  .workspace-shell--mobile .stat-card span {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.76rem;
+  }
+
+  .workspace-shell--mobile .stat-card strong {
+    font-size: 1.2rem;
+    line-height: 1;
+  }
+
+  .workspace-shell--mobile .panel--dashboard {
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .workspace-shell--mobile .project-card {
+    border-radius: 8px;
+  }
+}
+
+@media (max-width: 430px) {
+  .login-screen {
+    place-items: start center;
+    padding-top: calc(14px + env(safe-area-inset-top, 0px));
+  }
+
+  .login-shell {
+    width: 100%;
+  }
+
+  .login-shell__card {
+    padding: 16px;
+  }
+
+  .workspace-shell--mobile .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

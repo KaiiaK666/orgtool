@@ -1264,23 +1264,21 @@ function LoginScreen({
     <div className="login-screen">
       <div className="login-shell">
         <div className="login-shell__topbar">
-          <div className="login-shell__brand">
-            <img className="brand-mark" src={LOGO_SRC} alt="Organization Tool logo" />
-            <div>
-              <span className="eyebrow">Organization Tool</span>
-              <strong>Dealer workflow</strong>
-            </div>
-          </div>
           <ThemeToggle theme={theme} onToggle={onToggleTheme} compact />
         </div>
 
         <section className="login-shell__card">
-          <div className="login-shell__intro">
+          <div className="login-shell__brand">
+            <img className="brand-mark" src={LOGO_SRC} alt="Organization Tool logo" />
             <div>
-              <span className="eyebrow">Workspace</span>
-              <h1>Sign in</h1>
+              <strong>Organization Tool</strong>
+              <span>Workspace sign in</span>
             </div>
-            <p>Use your username and password to continue.</p>
+          </div>
+
+          <div className="login-shell__intro">
+            <h1>Sign in</h1>
+            <p>Enter your username and password.</p>
           </div>
 
           <form className="login-form" onSubmit={onSubmit}>
@@ -1294,15 +1292,14 @@ function LoginScreen({
             </label>
             {error ? <div className="error-banner">{error}</div> : null}
             <button type="submit" disabled={busy || !username.trim() || !password.trim()}>
-              {busy ? "Entering..." : "Enter Workspace"}
+              {busy ? "Entering..." : "Enter"}
             </button>
           </form>
 
           {quickLoginUsers.length ? (
             <div className="quick-login-strip">
               <div className="quick-login-strip__head">
-                <span className="eyebrow">Quick login users</span>
-                <small>Tap a name to fill the username</small>
+                <span className="eyebrow">Quick login</span>
               </div>
               <div className="quick-login-strip__list">
                 {quickLoginUsers.map((user) => (
