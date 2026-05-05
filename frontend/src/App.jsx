@@ -316,15 +316,15 @@ function spokenJoin(parts) {
 }
 
 function statusFromWord(word = "") {
-  const value = String(word || "").toLowerCase();
-  if (["done", "complete", "completed"].includes(value)) return "Done";
-  if (["pending", "open"].includes(value)) return "Pending";
-  if (value === "overdue") return "Overdue";
+  const value = normalizePhrase(word);
+  if (["done", "complete", "completed", "finish", "finished", "check", "checked", "checked off", "check off", "cross off", "bought", "got", "grabbed", "purchased"].includes(value)) return "Done";
+  if (["pending", "open", "todo", "to do", "not done", "still need"].includes(value)) return "Pending";
+  if (["overdue", "late", "past due"].includes(value)) return "Overdue";
   return null;
 }
 
 function extractStatusMentions(text = "") {
-  return Array.from(String(text || "").matchAll(/\b(done|complete|completed|pending|open|overdue)\b/gi))
+  return Array.from(String(text || "").matchAll(/\b(done|complete|completed|finish|finished|check(?:ed)?\s+off|cross\s+off|bought|got|grabbed|purchased|pending|open|to\s+do|todo|not\s+done|still\s+need|overdue|late|past\s+due)\b/gi))
     .map((match) => statusFromWord(match[1]))
     .filter(Boolean);
 }
@@ -418,6 +418,15 @@ function findNamedMatch(items, text, field = "name") {
 function findGroupMention(board, text, fallbackGroup = null) {
   const direct = findNamedMatch(board?.groups || [], text, "name");
   if (direct) return direct;
+  const normalized = normalizePhrase(text);
+  if (/\b(shopping|grocery|groceries|store|heb|walmart|costco)\b/i.test(normalized)) {
+    const shoppingGroup = (board?.groups || []).find((entry) => normalizePhrase(entry.name) === normalizePhrase(SHOPPING_LIST_GROUP_NAME));
+    if (shoppingGroup) return shoppingGroup;
+  }
+  if (/\b(the list|my list|list)\b/i.test(text)) {
+    const shoppingGroup = (board?.groups || []).find((entry) => normalizePhrase(entry.name) === normalizePhrase(SHOPPING_LIST_GROUP_NAME));
+    if (shoppingGroup) return shoppingGroup;
+  }
   if (fallbackGroup && /\b(this group|that group|same group|new one|that one)\b/i.test(text)) return fallbackGroup;
   return fallbackGroup;
 }
@@ -507,6 +516,12 @@ function extractShoppingItems(input = "") {
   const addToListMatch = text.match(/\b(?:add|put|include|need|buy|get|grab|pick\s+up)\s+(.+?)\s+(?:to|on|in|for)\s+(?:my\s+)?(?:shopping|grocery)\s+list\b/i);
   if (addToListMatch) return splitShoppingItems(addToListMatch[1]);
 
+  const groceryLeadMatch = text.match(/\b(?:groceries|grocery|shopping)\b(?:\s+list|\s+items)?\s*(?:are|is|with|for|:|-)?\s+(.+)$/i);
+  if (groceryLeadMatch) return splitShoppingItems(groceryLeadMatch[1]);
+
+  const needGroceriesMatch = text.match(/\b(?:need|buy|get|grab|pick\s+up)\s+(?:some\s+)?(?:groceries|grocery|shopping)\s*(.+)$/i);
+  if (needGroceriesMatch) return splitShoppingItems(needGroceriesMatch[1]);
+
   const afterListMatch = text.match(/\b(?:shopping|grocery)\s+list\b\s*(.*)$/i);
   if (afterListMatch) return splitShoppingItems(afterListMatch[1]);
 
@@ -514,7 +529,7 @@ function extractShoppingItems(input = "") {
 }
 
 function buildShoppingListPlan(input, board, currentUser) {
-  if (!board || !/\b(?:shopping|grocery)\s+list\b/i.test(input)) return null;
+  if (!board || !/\b(?:shopping|grocery|groceries|heb|walmart|costco|store)\b/i.test(input)) return null;
 
   const group =
     (board.groups || []).find((entry) => normalizePhrase(entry.name) === normalizePhrase(SHOPPING_LIST_GROUP_NAME)) || null;
@@ -566,6 +581,219 @@ function buildShoppingListPlan(input, board, currentUser) {
     operations,
     message: `Say yes if you want me to ${summary}.`,
   };
+}
+
+function extractDateMention(text = "") {
+  const match = String(text || "").match(
+    /\b(today|tomorrow|next week|next\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|\d{4}-\d{2}-\d{2})\b/i
+  );
+  if (!match) return { dueDate: null, raw: "" };
+  return { dueDate: parseNaturalDate(match[1]), raw: match[1] };
+}
+
+function stripDateMention(text = "", dateRaw = "") {
+  if (!dateRaw) return text;
+  return String(text || "")
+    .replace(new RegExp(`\\b(?:due|by|on|for)?\\s*${escapeRegExp(dateRaw)}\\b`, "i"), " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function firstWorkingGroup(board) {
+  return (board?.groups || []).find((group) => !/\bdone|complete|finished\b/i.test(group.name)) || board?.groups?.[0] || null;
+}
+
+function targetGroupForNaturalText(board, text, fallbackGroup = null) {
+  return findGroupMention(board, text, fallbackGroup) || firstWorkingGroup(board);
+}
+
+function stripGroupMention(text = "", group = null) {
+  let next = String(text || "");
+  if (group?.name) {
+    next = next.replace(new RegExp(`\\b(?:to|in|into|on|under|inside|for)\\s+(?:the\\s+)?${escapeRegExp(group.name)}(?:\\s+(?:group|list|section))?\\b`, "ig"), " ");
+  }
+  next = next.replace(/\b(?:to|in|into|on|under|inside|for)\s+(?:my\s+)?(?:shopping|grocery|groceries)\s+(?:list|items)?\b/gi, " ");
+  return next.replace(/\s+/g, " ").trim();
+}
+
+function cleanNaturalTaskName(text = "", group = null) {
+  const { raw } = extractDateMention(text);
+  return sentenceCase(
+    stripGroupMention(stripDateMention(text, raw), group)
+      .replace(/\b(?:hey|okay|ok|please|can you|could you|would you|i need to|need to|i need|remember to|remind me to|don't forget to|dont forget to|make sure to|add|create|make|new|put|start|set up|todo|to do|task|item|thing|for me)\b/gi, " ")
+      .replace(/\b(?:critical|high|medium|low|pending|open|done|complete|completed|finished|overdue|late|past due)\b/gi, " ")
+      .replace(/[.?!]+$/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+}
+
+function splitNaturalTaskNames(text = "", group = null) {
+  const cleaned = cleanNaturalTaskName(text, group);
+  if (!cleaned) return [];
+  const shouldSplit = /[,;\n]/.test(cleaned) || normalizePhrase(group?.name) === normalizePhrase(SHOPPING_LIST_GROUP_NAME);
+  if (!shouldSplit) return [cleaned];
+  return cleaned
+    .split(/\s*(?:,|;|\n|\band\b|\bplus\b)\s*/i)
+    .map((item) => sentenceCase(item.trim()))
+    .filter((item) => item.length > 1);
+}
+
+function tasksForGroup(board, group) {
+  return (board?.tasks || []).filter((task) => !group?.id || Number(task.group_id) === Number(group.id));
+}
+
+function buildNaturalStatusPlan(input, board, currentUser) {
+  const targetStatus =
+    extractStatusMentions(input).slice(-1)[0] ||
+    (/\b(?:finish|finished|complete|completed|check(?:ed)?\s+off|cross\s+off|got|bought|grabbed|purchased|done with)\b/i.test(input) ? "Done" : null);
+  if (!targetStatus) return null;
+
+  const group = findGroupMention(board, input);
+  const task = findTaskMention(board, input);
+  if (task?.id) {
+    return {
+      mode: "proposal",
+      operations: [
+        {
+          type: "update-task",
+          taskId: task.id,
+          taskName: task.name,
+          changes: { status: targetStatus },
+        },
+      ],
+      message: `Say yes if you want me to mark "${task.name}" as ${targetStatus}.`,
+    };
+  }
+
+  if (group?.id && /\b(?:all|everything|whole|entire|list|group|stuff|items?)\b/i.test(input)) {
+    const candidates = tasksForGroup(board, group).filter((entry) => entry.status !== targetStatus);
+    if (!candidates.length) {
+      return { mode: "answer", message: `${group.name} already looks ${targetStatus.toLowerCase()}.` };
+    }
+    const operations = [
+      {
+        type: "bulk-update",
+        taskIds: candidates.map((entry) => entry.id),
+        taskCount: candidates.length,
+        groupName: group.name,
+        sourceStatus: null,
+        changes: { status: targetStatus },
+      },
+    ];
+    return {
+      mode: "proposal",
+      operations,
+      message: `Say yes if you want me to ${describeAssistantOperation(operations[0])}.`,
+    };
+  }
+
+  return null;
+}
+
+function buildNaturalDeletePlan(input, board) {
+  if (!hasDeleteIntent(input) && !/\b(?:take|remove)\s+.+\s+(?:off|out of|from)\b/i.test(input)) return null;
+  const group = findGroupMention(board, input);
+  const task = findTaskMention(board, input);
+  if (task?.id) {
+    const operations = [{ type: "delete-task", taskId: task.id, taskName: task.name }];
+    return {
+      mode: "proposal",
+      operations,
+      message: `Say yes if you want me to ${describeAssistantOperation(operations[0])}.`,
+    };
+  }
+
+  if (group?.id) {
+    const itemText = stripGroupMention(
+      String(input || "").replace(/\b(?:delete|remove|take|off|out of|from|the|my|list|item|items)\b/gi, " "),
+      group
+    );
+    const itemNames = splitShoppingItems(itemText);
+    const operations = itemNames
+      .map((item) => findTaskMention({ tasks: tasksForGroup(board, group) }, item))
+      .filter(Boolean)
+      .map((entry) => ({ type: "delete-task", taskId: entry.id, taskName: entry.name }));
+    if (operations.length) {
+      return {
+        mode: "proposal",
+        operations,
+        message: `Say yes if you want me to ${spokenJoin(operations.map(describeAssistantOperation))}.`,
+      };
+    }
+  }
+
+  return null;
+}
+
+function buildNaturalDatePlan(input, board) {
+  const { dueDate, raw } = extractDateMention(input);
+  if (!dueDate) return null;
+  const task = findTaskMention(board, input);
+  if (!task?.id) return null;
+  const operations = [
+    {
+      type: "update-task",
+      taskId: task.id,
+      taskName: task.name,
+      changes: { due_date: dueDate },
+    },
+  ];
+  return {
+    mode: "proposal",
+    operations,
+    message: `Say yes if you want me to change the due date for "${task.name}" to ${formatDate(dueDate)}${raw ? ` from "${raw}"` : ""}.`,
+  };
+}
+
+function buildNaturalTaskCreatePlan(input, board, currentUser, workspace = {}) {
+  if (!/\b(?:add|create|make|new|put|start|set up|need|remember|remind|todo|to do|don't forget|dont forget|buy|get|grab|pick up)\b/i.test(input)) return null;
+  if (/\b(?:what|which|show|list|how many)\b/i.test(input)) return null;
+
+  const group = targetGroupForNaturalText(board, input);
+  if (!group?.id) return null;
+
+  const { dueDate } = extractDateMention(input);
+  const priority = extractPriorityMentions(input).slice(-1)[0] || "Medium";
+  const status = extractStatusMentions(input).slice(-1)[0] || "Pending";
+  const owner = /\b(?:assign|owner|owned by|for)\b/i.test(input) ? findUserMention(workspace.users || [], input) : null;
+  const names = splitNaturalTaskNames(input, group);
+  const existing = new Set(tasksForGroup(board, group).map((task) => normalizePhrase(task.name)));
+  const planned = new Set();
+  const operations = names
+    .filter((name) => {
+      const key = normalizePhrase(name);
+      if (!key || existing.has(key) || planned.has(key)) return false;
+      planned.add(key);
+      return true;
+    })
+    .map((name) => ({
+      type: "create-task",
+      groupId: group.id,
+      groupName: group.name,
+      name,
+      status,
+      dueDate,
+      ownerId: owner?.id ?? currentUser?.id ?? null,
+      priority,
+      notes: "",
+    }));
+
+  if (!operations.length) return null;
+  return {
+    mode: "proposal",
+    operations,
+    message: `Say yes if you want me to ${spokenJoin(operations.map(describeAssistantOperation))}.`,
+  };
+}
+
+function buildNaturalAssistantPlan(input, board, currentUser, workspace = {}) {
+  return (
+    buildNaturalDeletePlan(input, board) ||
+    buildNaturalStatusPlan(input, board, currentUser) ||
+    buildNaturalDatePlan(input, board) ||
+    buildNaturalTaskCreatePlan(input, board, currentUser, workspace)
+  );
 }
 
 function splitAssistantClauses(text = "") {
@@ -1077,6 +1305,9 @@ function buildAssistantPlan(input, board, currentUser, workspace = {}) {
   }
 
   if (!operations.length) {
+    const naturalPlan = buildNaturalAssistantPlan(input, board, currentUser, workspace);
+    if (naturalPlan) return naturalPlan;
+
     if (hasDeleteIntent(input) && (hasGroupIntent(input) || findGroupMention(board, input))) {
       return {
         mode: "answer",
@@ -1087,7 +1318,7 @@ function buildAssistantPlan(input, board, currentUser, workspace = {}) {
     return {
       mode: "answer",
       message:
-        'I can edit the real workspace from here. Try "create a shopping list with milk, eggs, and bread", "assign finalize trainer schedule to Miguel Castillo", "move finalize trainer schedule to Queue", "add a date column called Follow up", or "delete all done tasks in Queue".',
+        'I did not want to guess wrong. I understand normal speech like "I need groceries: milk, eggs, bread", "got milk", "finish everything in shopping", "take eggs off the list", or "remember to call Miguel tomorrow".',
     };
   }
 
@@ -1638,17 +1869,16 @@ function TaskCopilotPanel({
   const recognitionRef = useRef(null);
   const samplePrompts = isMobile
     ? [
-        "Create a shopping list with milk, eggs, and bread",
-        "Add paper towels to my shopping list",
-        "Mark milk as done",
+        "I need groceries: milk, eggs, and bread",
+        "Got milk",
+        "Remember to call Miguel tomorrow",
       ]
     : [
-        "Create a shopping list with milk, eggs, and bread",
+        "I need groceries: milk, eggs, and bread",
+        "Finish everything in shopping",
+        "Take eggs off the list",
+        "Remember to call Miguel tomorrow",
         "Mark all pending tasks in Queue as complete",
-        'Add note "Need artwork from Natasha" to finalize trainer schedule',
-        "Move finalize trainer schedule to tomorrow",
-        "Create a new task group called Natasha",
-        "Add a date column called Follow up",
       ];
   const visibleHistory = isMobile ? history.slice(-2) : history;
   const showThread = !isMobile || history.length > 1 || Boolean(pendingPlan);
@@ -1971,7 +2201,7 @@ function TaskCopilotPanel({
         <textarea
           rows={isMobile ? 2 : 3}
           value={draft}
-          placeholder={isMobile ? 'Say: "create shopping list with milk, eggs"' : 'Example: "Move finalize trainer schedule to tomorrow."'}
+          placeholder={isMobile ? 'Say: "I need groceries: milk, eggs"' : 'Example: "Remember to call Miguel tomorrow."'}
           onChange={(event) => setDraft(event.target.value)}
         />
         <button type="submit" disabled={!draft.trim() || running}>
