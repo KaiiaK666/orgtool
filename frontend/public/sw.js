@@ -1,4 +1,4 @@
-const CACHE_NAME = "orgtool-shell-v7";
+const CACHE_NAME = "orgtool-shell-v8";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/organization-tool-mark.png"];
 
 self.addEventListener("install", (event) => {

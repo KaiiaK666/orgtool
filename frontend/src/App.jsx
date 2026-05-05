@@ -20,6 +20,7 @@ import {
 const SESSION_KEY = "orgtool-session";
 const THEME_KEY = "orgtool-theme";
 const COLUMN_WIDTHS_KEY_PREFIX = "orgtool-column-widths";
+const GROUP_PREFS_KEY_PREFIX = "orgtool-group-prefs";
 const LOGO_SRC = "/organization-tool-mark.png";
 const MOBILE_LAYOUT_QUERY = "(max-width: 900px)";
 const DEFAULT_LOGIN_USERNAME = "kaiammons";
@@ -34,6 +35,13 @@ const COLUMN_TYPE_OPTIONS = [
   { value: "date", label: "Date", hint: "Calendar dates for deadlines, appointments, and follow-up targets." },
   { value: "number", label: "Number", hint: "Counts, amounts, goals, and any numeric value you want to sort fast." },
   { value: "tag", label: "Tag", hint: "Short labels like rooftop, campaign, lane, or source." },
+];
+const GROUP_MODE_OPTIONS = [
+  { value: "auto", label: "Auto", hint: "Keeps the group simple based on its name and tasks." },
+  { value: "checklist", label: "Checklist", hint: "Best for shopping lists and quick personal lists." },
+  { value: "project", label: "Project", hint: "Shows owner, due date, priority, notes, and custom columns." },
+  { value: "notes", label: "Notes", hint: "Keeps notes visible without making every row feel heavy." },
+  { value: "follow-up", label: "Follow-up", hint: "Good for calls, meetings, and date-driven reminders." },
 ];
 const DEPARTMENT_OPTIONS = ["Leadership", "BDC", "Sales", "Service", "Marketing", "Finance", "General"];
 const DISPLAY_MODE_QUERY = "(display-mode: standalone)";
@@ -290,6 +298,24 @@ function boardGroupSummary(board) {
   });
 }
 
+function inferredGroupMode(group) {
+  const name = normalizePhrase(group?.name || "");
+  if (/\b(shopping|grocery|groceries|checklist|list|errands|heb|walmart|costco)\b/.test(name)) return "checklist";
+  if (/\b(notes?|ideas?|scratch|parking lot)\b/.test(name)) return "notes";
+  if (/\b(follow up|callback|call backs?|appointments?|meeting|today|tomorrow)\b/.test(name)) return "follow-up";
+  return "project";
+}
+
+function groupDisplayMode(group, prefs = {}) {
+  const saved = prefs?.[group?.id]?.mode || group?.mode || group?.type || "auto";
+  if (saved && saved !== "auto" && GROUP_MODE_OPTIONS.some((option) => option.value === saved)) return saved;
+  return inferredGroupMode(group);
+}
+
+function groupModeLabel(mode) {
+  return GROUP_MODE_OPTIONS.find((option) => option.value === mode)?.label || "Project";
+}
+
 function normalizePhrase(value = "") {
   return String(value)
     .toLowerCase()
@@ -350,11 +376,13 @@ function parseNaturalDate(value = "") {
   today.setHours(0, 0, 0, 0);
 
   if (text === "today") return toIsoDate(today);
+  if (text === "tonight") return toIsoDate(today);
   if (text === "tomorrow") return toIsoDate(addDays(today, 1));
+  if (text === "this week") return toIsoDate(addDays(today, 3));
   if (text === "next week") return toIsoDate(addDays(today, 7));
 
-  const nextWeekdayMatch = text.match(/^next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i);
-  if (nextWeekdayMatch) {
+  const weekdayMatch = text.match(/^(?:next\s+|this\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i);
+  if (weekdayMatch) {
     const weekdays = {
       sunday: 0,
       monday: 1,
@@ -364,7 +392,7 @@ function parseNaturalDate(value = "") {
       friday: 5,
       saturday: 6,
     };
-    const targetDay = weekdays[nextWeekdayMatch[1].toLowerCase()];
+    const targetDay = weekdays[weekdayMatch[1].toLowerCase()];
     const delta = (7 - today.getDay() + targetDay) % 7 || 7;
     return toIsoDate(addDays(today, delta));
   }
@@ -451,8 +479,8 @@ function findUserMention(users, text) {
 function hasDeleteIntent(text = "") {
   const normalized = normalizePhrase(text);
   return (
-    /\b(?:delete|remove|clear|trash)\b/i.test(text) ||
-    /\b(?:delte|delet|dlete|remeove|remvoe|rmove)\b/.test(normalized)
+    /\b(?:delete|remove|clear|trash|erase|wipe|nuke|drop)\b/i.test(text) ||
+    /\b(?:delte|delet|dlete|remeove|remvoe|rmove|whipe)\b/.test(normalized)
   );
 }
 
@@ -469,7 +497,7 @@ function hasColumnIntent(text = "") {
 }
 
 function hasCreateIntent(text = "") {
-  return /\b(?:create|add|new)\b/i.test(text);
+  return /\b(?:create|add|new|make|start|set up|need|remember|remind|put)\b/i.test(text);
 }
 
 function priorityFromWord(word = "") {
@@ -585,7 +613,7 @@ function buildShoppingListPlan(input, board, currentUser) {
 
 function extractDateMention(text = "") {
   const match = String(text || "").match(
-    /\b(today|tomorrow|next week|next\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|\d{4}-\d{2}-\d{2})\b/i
+    /\b(today|tonight|tomorrow|this week|next week|next\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|(?:this\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|\d{4}-\d{2}-\d{2})\b/i
   );
   if (!match) return { dueDate: null, raw: "" };
   return { dueDate: parseNaturalDate(match[1]), raw: match[1] };
@@ -604,7 +632,13 @@ function firstWorkingGroup(board) {
 }
 
 function targetGroupForNaturalText(board, text, fallbackGroup = null) {
-  return findGroupMention(board, text, fallbackGroup) || firstWorkingGroup(board);
+  const mentioned = findGroupMention(board, text, fallbackGroup);
+  if (mentioned) return mentioned;
+  if (/\b(?:buy|get|grab|pick up|pickup|groceries|grocery|shopping|heb|walmart|costco|store)\b/i.test(text)) {
+    const shoppingGroup = (board?.groups || []).find((entry) => normalizePhrase(entry.name) === normalizePhrase(SHOPPING_LIST_GROUP_NAME));
+    if (shoppingGroup) return shoppingGroup;
+  }
+  return firstWorkingGroup(board);
 }
 
 function stripGroupMention(text = "", group = null) {
@@ -746,9 +780,47 @@ function buildNaturalDatePlan(input, board) {
   };
 }
 
+function buildNaturalGroupCreatePlan(input, board) {
+  if (!board || !hasCreateIntent(input)) return null;
+  if (!/\b(?:create|make|start|set up|new)\b/i.test(input)) return null;
+  if (!/\b(task\s+group|group|section|lane|list)\b/i.test(input)) return null;
+  if (/\b(?:what|which|show|how many|summarize|summary)\b/i.test(input)) return null;
+
+  const groupMatch =
+    String(input || "").match(/\b(?:create|make|start|set up)\s+(?:a\s+|an\s+|new\s+)?(?:(?:task\s+)?group|section|lane|list)(?:\s+(?:called|named|for))?\s+(.+)$/i) ||
+    String(input || "").match(/\b(?:create|make|start|set up|new)\s+(.+?)\s+(?:(?:task\s+)?group|section|lane|list)\b/i);
+  if (!groupMatch) return null;
+
+  let name = sentenceCase(
+    String(groupMatch[1] || "")
+      .replace(/\b(with|that has|including|include|items?|tasks?)\b.*$/i, "")
+      .replace(/\b(task\s+group|group|section|lane|list)\b/gi, " ")
+      .replace(/[.?!]+$/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+
+  if (!name || name.length < 2) return null;
+  if (/\bshopping|grocery|groceries|heb|walmart|costco\b/i.test(input)) name = SHOPPING_LIST_GROUP_NAME;
+  const existing = (board.groups || []).find((group) => normalizePhrase(group.name) === normalizePhrase(name));
+  if (existing) return { mode: "answer", message: `${existing.name} already exists on this board.` };
+
+  const operation = {
+    type: "create-group",
+    name,
+    color: /\bshopping|grocery|groceries|heb|walmart|costco\b/i.test(input) ? SHOPPING_LIST_COLOR : board.color || "#3156f5",
+  };
+
+  return {
+    mode: "proposal",
+    operations: [operation],
+    message: `Say yes if you want me to ${describeAssistantOperation(operation)}.`,
+  };
+}
+
 function buildNaturalTaskCreatePlan(input, board, currentUser, workspace = {}) {
   if (!/\b(?:add|create|make|new|put|start|set up|need|remember|remind|todo|to do|don't forget|dont forget|buy|get|grab|pick up)\b/i.test(input)) return null;
-  if (/\b(?:what|which|show|list|how many)\b/i.test(input)) return null;
+  if (/\b(?:what|which|show|how many|summarize|summary)\b/i.test(input)) return null;
 
   const group = targetGroupForNaturalText(board, input);
   if (!group?.id) return null;
@@ -792,6 +864,7 @@ function buildNaturalAssistantPlan(input, board, currentUser, workspace = {}) {
     buildNaturalDeletePlan(input, board) ||
     buildNaturalStatusPlan(input, board, currentUser) ||
     buildNaturalDatePlan(input, board) ||
+    buildNaturalGroupCreatePlan(input, board) ||
     buildNaturalTaskCreatePlan(input, board, currentUser, workspace)
   );
 }
@@ -810,7 +883,7 @@ function describeTask(task) {
 
 function buildReadOnlyAssistantResponse(input, board, currentUser) {
   const text = normalizePhrase(input);
-  const looksLikeQuery = /\b(what|which|show|list|summarize|summary|how many|what's|whats)\b/i.test(input);
+  const looksLikeQuery = /\b(what|which|show|list|summarize|summary|how many|what's|whats|focus|priorities|handle first|work on first|start with)\b/i.test(input);
   if (!looksLikeQuery && !/\b(my tasks|show my work)\b/i.test(input)) return null;
   const groupMention = findGroupMention(board, text);
   const tasks = sortTasks(board.tasks || []);
@@ -844,6 +917,13 @@ function buildReadOnlyAssistantResponse(input, board, currentUser) {
     return scopedTasks.length
       ? `Here is what I see for you: ${spokenJoin(scopedTasks.slice(0, 5).map(describeTask))}${scopedTasks.length > 5 ? ", and more" : ""}.`
       : "I do not see any tasks assigned to you on this board.";
+  }
+
+  if (/\b(focus|priority|priorities|handle first|work on first|start with|what.*today|today.*what)\b/i.test(input)) {
+    const focusTasks = groupTasks.filter((task) => visualStatus(task) !== "Done").slice(0, 4);
+    return focusTasks.length
+      ? `Start here: ${spokenJoin(focusTasks.map(describeTask))}. I sorted that by overdue first, then priority, then due date.`
+      : "There is nothing active on this board right now.";
   }
 
   return null;
@@ -1396,6 +1476,20 @@ function loadColumnWidths(board) {
 
 function persistColumnWidths(boardId, widths) {
   localStorage.setItem(`${COLUMN_WIDTHS_KEY_PREFIX}-${boardId}`, JSON.stringify(widths));
+}
+
+function loadGroupPrefs(board) {
+  if (!board?.id) return {};
+  try {
+    return JSON.parse(localStorage.getItem(`${GROUP_PREFS_KEY_PREFIX}-${board.id}`) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function persistGroupPrefs(boardId, prefs) {
+  if (!boardId) return;
+  localStorage.setItem(`${GROUP_PREFS_KEY_PREFIX}-${boardId}`, JSON.stringify(prefs || {}));
 }
 
 function blankProject(user) {
@@ -2291,7 +2385,7 @@ function TaskNotesField({ task, onUpdateTask, compact = false }) {
         <button type="button" className="notes-media-button" onClick={() => fileInputRef.current?.click()} disabled={uploading || !remainingSlots}>
           {uploading ? "Adding..." : "+ Screenshot"}
         </button>
-        <small>{remainingSlots ? `Paste, drag, or upload · ${screenshots.length}/${MAX_NOTE_SCREENSHOTS}` : `Screenshot limit reached · ${MAX_NOTE_SCREENSHOTS}/${MAX_NOTE_SCREENSHOTS}`}</small>
+        <small>{remainingSlots ? `Paste, drag, or upload - ${screenshots.length}/${MAX_NOTE_SCREENSHOTS}` : `Screenshot limit reached - ${MAX_NOTE_SCREENSHOTS}/${MAX_NOTE_SCREENSHOTS}`}</small>
         <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(event) => addScreenshots(event.target.files)} />
       </div>
 
@@ -2391,7 +2485,7 @@ function TaskRow({ task, board, users, onUpdateTask }) {
   );
 }
 
-function MobileTaskCard({ task, board, users, onUpdateTask, group }) {
+function MobileTaskCard({ task, board, users, onUpdateTask, group, groupMode }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   function saveField(field, nextValue) {
@@ -2416,7 +2510,8 @@ function MobileTaskCard({ task, board, users, onUpdateTask, group }) {
 
   const rowStatus = task.status || visualStatus(task);
   const isDone = rowStatus === "Done";
-  const isChecklistGroup = normalizePhrase(group?.name) === normalizePhrase(SHOPPING_LIST_GROUP_NAME);
+  const isChecklistGroup = groupMode === "checklist" || normalizePhrase(group?.name) === normalizePhrase(SHOPPING_LIST_GROUP_NAME);
+  const isNotesGroup = groupMode === "notes";
   const hasNotes = Boolean(String(task.notes || "").trim()) || Boolean(task.screenshots?.length);
   const owner = users.find((user) => Number(user.id) === Number(task.owner_id));
 
@@ -2437,7 +2532,7 @@ function MobileTaskCard({ task, board, users, onUpdateTask, group }) {
         </button>
         <input className="cell-input cell-input--task" defaultValue={task.name} onBlur={(event) => saveField("name", event.target.value.trim())} />
         <button type="button" className="mobile-task-card__details-toggle" onClick={() => setDetailsOpen((current) => !current)}>
-          {detailsOpen ? "Hide" : "Details"}
+          {detailsOpen ? "Hide" : isChecklistGroup ? "More" : "Details"}
         </button>
       </div>
 
@@ -2451,7 +2546,34 @@ function MobileTaskCard({ task, board, users, onUpdateTask, group }) {
       ) : null}
 
       {detailsOpen ? (
-      <div className="mobile-task-card__grid">
+      <div className={cls("mobile-task-card__grid", (isChecklistGroup || isNotesGroup) && "mobile-task-card__grid--simple")}>
+        {isChecklistGroup || isNotesGroup ? (
+          <>
+            <label>
+              <span>Status</span>
+              <select className={cls("cell-select", `cell-select--${tone(task.status || rowStatus)}`)} value={task.status} onChange={(event) => saveField("status", event.target.value)}>
+                {STATUS_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {!isChecklistGroup ? (
+              <label>
+                <span>Due</span>
+                <input className="cell-input cell-input--date" type="date" value={task.due_date || ""} onChange={(event) => saveField("due_date", event.target.value)} />
+              </label>
+            ) : null}
+
+            <div className="mobile-task-card__full mobile-task-card__section">
+              <span>Notes</span>
+              <TaskNotesField task={task} onUpdateTask={onUpdateTask} compact />
+            </div>
+          </>
+        ) : (
+          <>
         <label>
           <span>Priority</span>
           <select className={cls("cell-select", `cell-select--${tone(task.priority)}`)} value={task.priority} onChange={(event) => saveField("priority", event.target.value)}>
@@ -2511,6 +2633,8 @@ function MobileTaskCard({ task, board, users, onUpdateTask, group }) {
             </label>
           );
         })}
+          </>
+        )}
       </div>
       ) : null}
     </article>
@@ -2537,10 +2661,11 @@ function ProjectBoard({
   const [search, setSearch] = useState("");
   const [mineOnly, setMineOnly] = useState(false);
   const [quickTasks, setQuickTasks] = useState({});
-  const [groupDraft, setGroupDraft] = useState({ name: "", color: "#3156f5" });
+  const [groupDraft, setGroupDraft] = useState({ name: "", color: "#3156f5", mode: "auto" });
   const [showColumnForm, setShowColumnForm] = useState(false);
   const [columnDraft, setColumnDraft] = useState({ name: "", type: "text" });
   const [columnWidths, setColumnWidths] = useState(() => loadColumnWidths(board));
+  const [groupPrefs, setGroupPrefs] = useState(() => loadGroupPrefs(board));
   const [showBoardEditor, setShowBoardEditor] = useState(false);
   const [boardDraft, setBoardDraft] = useState(() => ({
     name: board?.name || "",
@@ -2556,10 +2681,11 @@ function ProjectBoard({
     setSearch("");
     setMineOnly(false);
     setQuickTasks({});
-    setGroupDraft({ name: "", color: board?.color || "#3156f5" });
+    setGroupDraft({ name: "", color: board?.color || "#3156f5", mode: "auto" });
     setShowColumnForm(false);
     setColumnDraft({ name: "", type: "text" });
     setColumnWidths(loadColumnWidths(board));
+    setGroupPrefs(loadGroupPrefs(board));
     setShowBoardEditor(false);
     setBoardDraft({
       name: board?.name || "",
@@ -2590,6 +2716,11 @@ function ProjectBoard({
     if (!board?.id) return;
     persistColumnWidths(board.id, columnWidths);
   }, [board?.id, columnWidths]);
+
+  useEffect(() => {
+    if (!board?.id) return;
+    persistGroupPrefs(board.id, groupPrefs);
+  }, [board?.id, groupPrefs]);
 
   const selectedColumnType = COLUMN_TYPE_OPTIONS.find((option) => option.value === columnDraft.type) || COLUMN_TYPE_OPTIONS[0];
 
@@ -2636,7 +2767,14 @@ function ProjectBoard({
     event.preventDefault();
     const name = groupDraft.name.trim();
     if (!name) return;
-    onCreateGroup(name, groupDraft.color);
+    onCreateGroup(name, groupDraft.color).then((group) => {
+      if (group?.id && groupDraft.mode !== "auto") {
+        setGroupPrefs((current) => ({
+          ...current,
+          [group.id]: { ...(current[group.id] || {}), mode: groupDraft.mode },
+        }));
+      }
+    });
     setGroupDraft((current) => ({ ...current, name: "" }));
   }
 
@@ -2661,6 +2799,7 @@ function ProjectBoard({
       [group.id]: {
         name: group.name || "",
         color: group.color || board.color || "#3156f5",
+        mode: groupPrefs[group.id]?.mode || group.mode || group.type || "auto",
       },
     }));
   }
@@ -2675,6 +2814,13 @@ function ProjectBoard({
       name,
       color: draft.color,
     });
+    setGroupPrefs((current) => ({
+      ...current,
+      [group.id]: {
+        ...(current[group.id] || {}),
+        mode: draft.mode || "auto",
+      },
+    }));
     setEditingGroupId(null);
   }
 
@@ -2865,7 +3011,9 @@ function ProjectBoard({
           const groupDraftValue = groupEditDrafts[group.id] || {
             name: group.name || "",
             color: group.color || board.color || "#3156f5",
+            mode: groupPrefs[group.id]?.mode || group.mode || group.type || "auto",
           };
+          const displayMode = groupDisplayMode(group, groupPrefs);
           return (
               <section
                 key={group.id}
@@ -2885,7 +3033,7 @@ function ProjectBoard({
                   </span>
                   <div className="group-card__meta">
                     <h3>{group.name}</h3>
-                    <small>{visibleLabel}</small>
+                    <small>{visibleLabel} - {groupModeLabel(displayMode)}</small>
                   </div>
                 </button>
 
@@ -2907,6 +3055,7 @@ function ProjectBoard({
                 ) : (
                   <span className="group-card__summary-item group-card__summary-item--empty">No tasks yet</span>
                 )}
+                <span className="group-card__summary-item group-card__summary-item--mode">{groupModeLabel(displayMode)} mode</span>
               </div>
 
               {!collapsed ? (
@@ -2938,7 +3087,28 @@ function ProjectBoard({
                           }
                         />
                       </label>
+                      <label>
+                        <span>Display mode</span>
+                        <select
+                          value={groupDraftValue.mode || "auto"}
+                          onChange={(event) =>
+                            setGroupEditDrafts((current) => ({
+                              ...current,
+                              [group.id]: { ...groupDraftValue, mode: event.target.value },
+                            }))
+                          }
+                        >
+                          {GROUP_MODE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                       <div className="group-editor__actions">
+                        <button type="button" className="ghost-button ghost-button--danger" onClick={() => window.confirm(`Delete "${group.name}" and its tasks?`) && onDeleteGroup(group.id)}>
+                          Delete
+                        </button>
                         <button type="button" className="ghost-button" onClick={() => setEditingGroupId(null)}>
                           Cancel
                         </button>
@@ -2947,10 +3117,10 @@ function ProjectBoard({
                     </form>
                   ) : null}
 
-                  {isMobile ? (
+                  {isMobile || displayMode === "checklist" ? (
                     <div className="mobile-task-list">
                       {tasks.map((task) => (
-                        <MobileTaskCard key={task.id} task={task} board={board} group={group} users={users} onUpdateTask={onUpdateTask} />
+                        <MobileTaskCard key={task.id} task={task} board={board} group={group} groupMode={displayMode} users={users} onUpdateTask={onUpdateTask} />
                       ))}
                       <form className="add-task-inline add-task-inline--mobile" onSubmit={(event) => submitQuickTask(event, group.id)}>
                         <button type="submit" className="plus-button plus-button--small">
@@ -3083,6 +3253,16 @@ function ProjectBoard({
           <label className="color-control color-control--create">
             <span>Color</span>
             <input type="color" value={groupDraft.color} onChange={(event) => setGroupDraft((current) => ({ ...current, color: event.target.value }))} />
+          </label>
+          <label>
+            <span>Mode</span>
+            <select value={groupDraft.mode} onChange={(event) => setGroupDraft((current) => ({ ...current, mode: event.target.value }))}>
+              {GROUP_MODE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
           <button type="submit">+ Add Task Group</button>
         </form>
@@ -3567,6 +3747,25 @@ export default function App() {
     if (boardId !== null) setSelectedBoardId(boardId);
     setPage(nextPage);
     if (isMobile) setSidebarOpen(false);
+  }
+
+  function scrollToWorkspaceSection(selector) {
+    if (typeof window === "undefined") return;
+    requestAnimationFrame(() => {
+      const target = document.querySelector(selector);
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+      target?.querySelector?.("textarea,input,button")?.focus?.({ preventScroll: true });
+    });
+  }
+
+  function openMobileCopilot() {
+    navigateTo("project");
+    scrollToWorkspaceSection(".copilot-panel");
+  }
+
+  function openMobileQuickAdd() {
+    navigateTo("project");
+    scrollToWorkspaceSection(".add-task-inline--mobile, .add-task-inline");
   }
 
   function mutateBoard(boardId, updater) {
@@ -4107,6 +4306,29 @@ export default function App() {
           />
         ) : null}
       </main>
+
+      {isMobile ? (
+        <nav className="mobile-bottom-nav" aria-label="Mobile workspace shortcuts">
+          <button type="button" className={page === "project" ? "is-active" : ""} onClick={() => navigateTo("project")}>
+            Boards
+          </button>
+          <button type="button" onClick={openMobileCopilot}>
+            AI
+          </button>
+          <button type="button" className="mobile-bottom-nav__add" onClick={openMobileQuickAdd}>
+            Add
+          </button>
+          {isAdmin ? (
+            <button type="button" className={page === "admin" ? "is-active" : ""} onClick={() => navigateTo("admin")}>
+              Admin
+            </button>
+          ) : (
+            <button type="button" onClick={() => setShowTutorial(true)}>
+              Help
+            </button>
+          )}
+        </nav>
+      ) : null}
     </div>
   );
 }
