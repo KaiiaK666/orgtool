@@ -22,6 +22,9 @@ const THEME_KEY = "orgtool-theme";
 const COLUMN_WIDTHS_KEY_PREFIX = "orgtool-column-widths";
 const LOGO_SRC = "/organization-tool-mark.png";
 const MOBILE_LAYOUT_QUERY = "(max-width: 900px)";
+const DEFAULT_LOGIN_USERNAME = "kaiammons";
+const SHOPPING_LIST_GROUP_NAME = "Shopping List";
+const SHOPPING_LIST_COLOR = "#16a34a";
 const STATUS_OPTIONS = ["Overdue", "Pending", "Done"];
 const PRIORITY_OPTIONS = ["Critical", "High", "Medium", "Low"];
 const ROLE_OPTIONS = ["Admin", "Manager", "Coordinator", "Staff"];
@@ -476,6 +479,93 @@ function fieldTypeFromWord(word = "") {
   const value = String(word || "").toLowerCase();
   if (["open", "text", "date", "number", "tag"].includes(value)) return value === "open" ? "text" : value;
   return null;
+}
+
+function cleanShoppingItem(value = "") {
+  return sentenceCase(
+    String(value || "")
+      .replace(/\b(?:please|could|can|you|create|make|add|put|include|need|needs|buy|get|grab|pick|up|shopping|grocery|list|items?|tasks?|called|named|with|for|to|my|a|an|the)\b/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+}
+
+function splitShoppingItems(value = "") {
+  const text = String(value || "")
+    .replace(/[.?!]+$/g, "")
+    .replace(/\b(?:with|for|including|include|of|that has|to have|containing)\b\s*/i, "")
+    .trim();
+
+  return text
+    .split(/\s*(?:,|;|\n|\band\b|\bplus\b)\s*/i)
+    .map(cleanShoppingItem)
+    .filter((item) => item.length > 1 && !["Shopping", "List", "Grocery"].includes(item));
+}
+
+function extractShoppingItems(input = "") {
+  const text = String(input || "").trim();
+  const addToListMatch = text.match(/\b(?:add|put|include|need|buy|get|grab|pick\s+up)\s+(.+?)\s+(?:to|on|in|for)\s+(?:my\s+)?(?:shopping|grocery)\s+list\b/i);
+  if (addToListMatch) return splitShoppingItems(addToListMatch[1]);
+
+  const afterListMatch = text.match(/\b(?:shopping|grocery)\s+list\b\s*(.*)$/i);
+  if (afterListMatch) return splitShoppingItems(afterListMatch[1]);
+
+  return [];
+}
+
+function buildShoppingListPlan(input, board, currentUser) {
+  if (!board || !/\b(?:shopping|grocery)\s+list\b/i.test(input)) return null;
+
+  const group =
+    (board.groups || []).find((entry) => normalizePhrase(entry.name) === normalizePhrase(SHOPPING_LIST_GROUP_NAME)) || null;
+  const items = extractShoppingItems(input);
+  const operations = [];
+
+  if (!group) {
+    operations.push({
+      type: "create-group",
+      name: SHOPPING_LIST_GROUP_NAME,
+      color: SHOPPING_LIST_COLOR,
+    });
+  }
+
+  const existingTaskNames = new Set(
+    (board.tasks || [])
+      .filter((task) => group?.id && Number(task.group_id) === Number(group.id))
+      .map((task) => normalizePhrase(task.name))
+  );
+  const plannedTaskNames = new Set();
+
+  items.forEach((item) => {
+    const key = normalizePhrase(item);
+    if (!key || existingTaskNames.has(key) || plannedTaskNames.has(key)) return;
+    plannedTaskNames.add(key);
+    operations.push({
+      type: "create-task",
+      groupId: group?.id || null,
+      groupName: SHOPPING_LIST_GROUP_NAME,
+      name: item,
+      status: "Pending",
+      dueDate: null,
+      ownerId: currentUser?.id ?? null,
+      priority: "Medium",
+      notes: "",
+    });
+  });
+
+  if (!operations.length) {
+    return {
+      mode: "answer",
+      message: 'Your Shopping List already exists. Try "add milk, eggs, and bread to my shopping list" and I will ask before changing it.',
+    };
+  }
+
+  const summary = spokenJoin(operations.map((operation) => describeAssistantOperation(operation)));
+  return {
+    mode: "proposal",
+    operations,
+    message: `Say yes if you want me to ${summary}.`,
+  };
 }
 
 function splitAssistantClauses(text = "") {
@@ -972,6 +1062,9 @@ function buildAssistantPlan(input, board, currentUser, workspace = {}) {
     return { mode: "answer", message: readOnlyResponse };
   }
 
+  const shoppingListPlan = buildShoppingListPlan(input, board, currentUser);
+  if (shoppingListPlan) return shoppingListPlan;
+
   const clauses = splitAssistantClauses(input);
   const operations = [];
   let context = { group: null };
@@ -994,7 +1087,7 @@ function buildAssistantPlan(input, board, currentUser, workspace = {}) {
     return {
       mode: "answer",
       message:
-        'I can edit the real workspace from here. Try "create a new project called Summer Push", "rename this project to Trainer Roadmap", "assign finalize trainer schedule to Miguel Castillo", "move finalize trainer schedule to Queue", "add a date column called Follow up", or "delete all done tasks in Queue".',
+        'I can edit the real workspace from here. Try "create a shopping list with milk, eggs, and bread", "assign finalize trainer schedule to Miguel Castillo", "move finalize trainer schedule to Queue", "add a date column called Follow up", or "delete all done tasks in Queue".',
     };
   }
 
@@ -1543,14 +1636,20 @@ function TaskCopilotPanel({
   const [running, setRunning] = useState(false);
   const [showExamples, setShowExamples] = useState(false);
   const recognitionRef = useRef(null);
-  const samplePrompts = [
-    "Mark all pending tasks in Queue as complete",
-    'Add note "Need artwork from Natasha" to finalize trainer schedule',
-    "Move finalize trainer schedule to tomorrow",
-    "Assign finalize trainer schedule to Miguel Castillo",
-    "Create a new task group called Natasha",
-    "Add a date column called Follow up",
-  ];
+  const samplePrompts = isMobile
+    ? [
+        "Create a shopping list with milk, eggs, and bread",
+        "Add paper towels to my shopping list",
+        "Mark milk as done",
+      ]
+    : [
+        "Create a shopping list with milk, eggs, and bread",
+        "Mark all pending tasks in Queue as complete",
+        'Add note "Need artwork from Natasha" to finalize trainer schedule',
+        "Move finalize trainer schedule to tomorrow",
+        "Create a new task group called Natasha",
+        "Add a date column called Follow up",
+      ];
   const visibleHistory = isMobile ? history.slice(-2) : history;
   const showThread = !isMobile || history.length > 1 || Boolean(pendingPlan);
 
@@ -1817,11 +1916,13 @@ function TaskCopilotPanel({
           <button type="button" className={cls("ghost-button", showExamples && "ghost-button--active")} onClick={() => setShowExamples((current) => !current)}>
             {showExamples ? "Hide examples" : "Examples"}
           </button>
-          <button type="button" className={cls("ghost-button", voiceReplies && "ghost-button--active")} onClick={() => setVoiceReplies((current) => !current)}>
-            {voiceReplies ? "Spoken replies on" : "Spoken replies off"}
-          </button>
+          {!isMobile ? (
+            <button type="button" className={cls("ghost-button", voiceReplies && "ghost-button--active")} onClick={() => setVoiceReplies((current) => !current)}>
+              {voiceReplies ? "Spoken replies on" : "Spoken replies off"}
+            </button>
+          ) : null}
           <button type="button" className={cls("ghost-button", listening && "ghost-button--active")} onClick={beginListening}>
-            {listening ? "Stop voice input" : "Start voice input"}
+            {listening ? (isMobile ? "Listening..." : "Stop voice input") : isMobile ? "Talk" : "Start voice input"}
           </button>
         </div>
       </div>
@@ -1870,7 +1971,7 @@ function TaskCopilotPanel({
         <textarea
           rows={isMobile ? 2 : 3}
           value={draft}
-          placeholder={isMobile ? 'Example: "Move trainer schedule to tomorrow."' : 'Example: "Move finalize trainer schedule to tomorrow."'}
+          placeholder={isMobile ? 'Say: "create shopping list with milk, eggs"' : 'Example: "Move finalize trainer schedule to tomorrow."'}
           onChange={(event) => setDraft(event.target.value)}
         />
         <button type="submit" disabled={!draft.trim() || running}>
@@ -2217,8 +2318,8 @@ function ProjectBoard({
 
     setCollapsedGroups((current) => {
       const next = {};
-      board.groups.forEach((group, index) => {
-        next[group.id] = typeof current[group.id] === "boolean" ? current[group.id] : isMobile ? index !== 0 : false;
+      board.groups.forEach((group) => {
+        next[group.id] = typeof current[group.id] === "boolean" ? current[group.id] : isMobile ? true : false;
       });
       return next;
     });
@@ -3008,7 +3109,7 @@ export default function App() {
   const [selectedBoardId, setSelectedBoardId] = useState(null);
   const [page, setPage] = useState("dashboard");
   const [loginPassword, setLoginPassword] = useState("");
-  const [loginUsername, setLoginUsername] = useState("");
+  const [loginUsername, setLoginUsername] = useState(DEFAULT_LOGIN_USERNAME);
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [projectForm, setProjectForm] = useState(blankProject(null));
   const [showTutorial, setShowTutorial] = useState(false);
@@ -3067,12 +3168,19 @@ export default function App() {
   );
 
   const visibleBoards = useMemo(() => relevantBoards(data.boards, currentUser), [data.boards, currentUser]);
+  const firstVisibleBoardId = visibleBoards[0]?.id || null;
   const activeBoard = useMemo(
     () => visibleBoards.find((board) => Number(board.id) === Number(selectedBoardId)) || visibleBoards[0] || null,
     [visibleBoards, selectedBoardId]
   );
   const quickLoginUsers = useMemo(
-    () => data.users.filter((user) => user.active !== false && user.quick_login === true && user.username),
+    () =>
+      data.users.filter(
+        (user) =>
+          user.active !== false &&
+          user.username &&
+          (user.quick_login === true || normalizePhrase(user.username) === normalizePhrase(DEFAULT_LOGIN_USERNAME))
+      ),
     [data.users]
   );
 
@@ -3099,6 +3207,12 @@ export default function App() {
   }, [visibleBoards.length, activeBoard?.id]);
 
   useEffect(() => {
+    if (!isMobile || !currentUser || page !== "dashboard" || !firstVisibleBoardId) return;
+    setSelectedBoardId((current) => current || firstVisibleBoardId);
+    setPage("project");
+  }, [isMobile, currentUser?.id, page, firstVisibleBoardId]);
+
+  useEffect(() => {
     if (currentUser) setProjectForm(blankProject(currentUser));
   }, [currentUser?.id]);
 
@@ -3117,11 +3231,13 @@ export default function App() {
     try {
       const response = await login({ username: loginUsername.trim(), password: loginPassword });
       const nextSession = { user_id: response.user.id };
+      const firstUserBoard = relevantBoards(data.boards, response.user)[0] || null;
       saveSession(nextSession);
       setSession(nextSession);
-      setPage("dashboard");
+      if (firstUserBoard) setSelectedBoardId(firstUserBoard.id);
+      setPage(isMobile && firstUserBoard ? "project" : "dashboard");
       setLoginPassword("");
-      setLoginUsername("");
+      setLoginUsername(DEFAULT_LOGIN_USERNAME);
     } catch (submitError) {
       setError(submitError.message || "Unable to log in");
     } finally {
@@ -3134,7 +3250,7 @@ export default function App() {
     setSession(null);
     setPage("dashboard");
     setLoginPassword("");
-    setLoginUsername("");
+    setLoginUsername(DEFAULT_LOGIN_USERNAME);
     setSidebarOpen(false);
   }
 
@@ -3169,10 +3285,13 @@ export default function App() {
 
   function beginPreview(userId) {
     if (!currentUser || currentUser.role !== "Admin") return;
+    const previewUser = data.users.find((user) => Number(user.id) === Number(userId)) || null;
+    const firstPreviewBoard = relevantBoards(data.boards, previewUser)[0] || null;
     const nextSession = { user_id: Number(userId), admin_user_id: Number(currentUser.id) };
     saveSession(nextSession);
     setSession(nextSession);
-    setPage("dashboard");
+    if (firstPreviewBoard) setSelectedBoardId(firstPreviewBoard.id);
+    setPage(isMobile && firstPreviewBoard ? "project" : "dashboard");
   }
 
   function endPreview() {
@@ -3553,9 +3672,11 @@ export default function App() {
         </div>
 
         <nav className="main-nav">
-          <button type="button" className={page === "dashboard" ? "is-active" : ""} onClick={() => navigateTo("dashboard")}>
-            Dashboard
-          </button>
+          {!isMobile ? (
+            <button type="button" className={page === "dashboard" ? "is-active" : ""} onClick={() => navigateTo("dashboard")}>
+              Dashboard
+            </button>
+          ) : null}
           <button type="button" className={page === "project" ? "is-active" : ""} onClick={() => navigateTo("project")}>
             Projects
           </button>
