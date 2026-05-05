@@ -2161,7 +2161,9 @@ function TaskRow({ task, board, users, onUpdateTask }) {
   );
 }
 
-function MobileTaskCard({ task, board, users, onUpdateTask }) {
+function MobileTaskCard({ task, board, users, onUpdateTask, group }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
   function saveField(field, nextValue) {
     const currentValue = task[field] ?? "";
     if (String(currentValue) === String(nextValue ?? "")) return;
@@ -2183,14 +2185,42 @@ function MobileTaskCard({ task, board, users, onUpdateTask }) {
   }
 
   const rowStatus = task.status || visualStatus(task);
+  const isDone = rowStatus === "Done";
+  const isChecklistGroup = normalizePhrase(group?.name) === normalizePhrase(SHOPPING_LIST_GROUP_NAME);
+  const hasNotes = Boolean(String(task.notes || "").trim()) || Boolean(task.screenshots?.length);
+  const owner = users.find((user) => Number(user.id) === Number(task.owner_id));
+
+  function toggleDone() {
+    saveField("status", isDone ? "Pending" : "Done");
+  }
 
   return (
     <article className={cls("mobile-task-card", `mobile-task-card--${tone(rowStatus)}`)}>
-      <div className="mobile-task-card__head">
+      <div className="mobile-task-card__summary-row">
+        <button
+          type="button"
+          className={cls("mobile-task-card__check", isDone && "is-done")}
+          aria-label={isDone ? "Mark task pending" : "Mark task done"}
+          onClick={toggleDone}
+        >
+          {isDone ? "✓" : ""}
+        </button>
         <input className="cell-input cell-input--task" defaultValue={task.name} onBlur={(event) => saveField("name", event.target.value.trim())} />
-        <span className={cls("pill", `pill--${tone(rowStatus)}`)}>{rowStatus}</span>
+        <button type="button" className="mobile-task-card__details-toggle" onClick={() => setDetailsOpen((current) => !current)}>
+          {detailsOpen ? "Hide" : "Details"}
+        </button>
       </div>
 
+      {!isChecklistGroup || rowStatus !== "Pending" || task.due_date || hasNotes ? (
+        <div className="mobile-task-card__meta-line">
+          {!isChecklistGroup || rowStatus !== "Pending" ? <span className={cls("pill", `pill--${tone(rowStatus)}`)}>{rowStatus}</span> : null}
+          {task.due_date ? <span>{formatDate(task.due_date)}</span> : null}
+          {owner && !isChecklistGroup ? <span>{owner.name}</span> : null}
+          {hasNotes ? <span>Notes</span> : null}
+        </div>
+      ) : null}
+
+      {detailsOpen ? (
       <div className="mobile-task-card__grid">
         <label>
           <span>Priority</span>
@@ -2233,7 +2263,7 @@ function MobileTaskCard({ task, board, users, onUpdateTask }) {
 
         <div className="mobile-task-card__full mobile-task-card__section">
           <span>Notes</span>
-          <TaskNotesField task={task} onUpdateTask={onUpdateTask} />
+          <TaskNotesField task={task} onUpdateTask={onUpdateTask} compact />
         </div>
 
         {board.fields.map((field) => {
@@ -2252,6 +2282,7 @@ function MobileTaskCard({ task, board, users, onUpdateTask }) {
           );
         })}
       </div>
+      ) : null}
     </article>
   );
 }
@@ -2689,7 +2720,7 @@ function ProjectBoard({
                   {isMobile ? (
                     <div className="mobile-task-list">
                       {tasks.map((task) => (
-                        <MobileTaskCard key={task.id} task={task} board={board} users={users} onUpdateTask={onUpdateTask} />
+                        <MobileTaskCard key={task.id} task={task} board={board} group={group} users={users} onUpdateTask={onUpdateTask} />
                       ))}
                       <form className="add-task-inline add-task-inline--mobile" onSubmit={(event) => submitQuickTask(event, group.id)}>
                         <button type="submit" className="plus-button plus-button--small">

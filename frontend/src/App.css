@@ -5326,3 +5326,89 @@ body {
     padding-top: 0;
   }
 }
+
+/* Mobile checklist task rows */
+@media (max-width: 900px) {
+  .workspace-shell--mobile .mobile-task-card {
+    gap: 6px;
+    padding: 7px;
+    border-radius: 11px;
+  }
+
+  .workspace-shell--mobile .mobile-task-card__summary-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .workspace-shell--mobile .mobile-task-card__check {
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    color: var(--success-text);
+    font-size: 1rem;
+    font-weight: 900;
+  }
+
+  .workspace-shell--mobile .mobile-task-card__check.is-done {
+    border-color: var(--success-line);
+    background: var(--success-bg);
+  }
+
+  .workspace-shell--mobile .mobile-task-card__summary-row .cell-input--task {
+    min-height: 38px;
+    padding: 8px 9px;
+    border-radius: 9px;
+    font-weight: 750;
+  }
+
+  .workspace-shell--mobile .mobile-task-card__details-toggle {
+    min-height: 34px;
+    padding: 7px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface-muted);
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+  }
+
+  .workspace-shell--mobile .mobile-task-card__meta-line {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    padding-left: 41px;
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.2;
+  }
+
+  .workspace-shell--mobile .mobile-task-card__meta-line .pill {
+    min-height: 22px;
+    padding: 3px 7px;
+    font-size: 0.66rem;
+  }
+
+  .workspace-shell--mobile .mobile-task-card__grid {
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+  }
+
+  .workspace-shell--mobile .mobile-task-card .notes-media-button {
+    min-height: 32px;
+    padding: 6px 8px;
+  }
+
+  .workspace-shell--mobile .mobile-task-card .notes-field__toolbar small {
+    display: none;
+  }
+}
