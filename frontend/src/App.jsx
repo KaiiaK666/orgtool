@@ -1136,6 +1136,12 @@ function parseAssistantClause(clause, board, currentUser, context = {}, workspac
       };
     }
 
+    const missingNamedGroup =
+      !group?.id &&
+      (/\b(?:in|inside|under|for|from)\s+(?!me\b|my\b|today\b|tomorrow\b)([a-z][a-z0-9 -]{1,80})/i.test(workingText) ||
+        /\b(?:shopping|grocery|groceries|list)\b/i.test(workingText));
+    if (missingNamedGroup) return null;
+
     const matchingTasks = (board.tasks || []).filter((entry) => {
       if (group?.id && Number(entry.group_id) !== Number(group.id)) return false;
       if (myOnly && Number(entry.owner_id) !== Number(currentUser?.id)) return false;
