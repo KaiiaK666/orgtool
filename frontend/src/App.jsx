@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  createBillingCheckout,
+  createBillingPortal,
   createBoard,
   createBoardField,
   createGroup,
@@ -1981,6 +1983,92 @@ function DashboardView({ currentUser, boards, announcements, activity = [], onUn
   );
 }
 
+function BillingView({ billing, boards, busy, onStartCheckout, onManageBilling }) {
+  const current = billing || {};
+  const isPro = current.plan === "pro";
+  const price = `$${((current.pro_price_cents || 1500) / 100).toFixed(0)}`;
+  const projectCount = boards.length;
+  const groupCount = boards.reduce((total, board) => total + (board.groups?.length || 0), 0);
+  const taskCount = boards.reduce((total, board) => total + (board.tasks?.length || 0), 0);
+  const limits = current.free_limits || { projects: 1, task_groups: 3, tasks: 25 };
+
+  return (
+    <div className="billing-view">
+      <section className="panel billing-hero">
+        <div>
+          <span className="eyebrow">Commercial</span>
+          <h3>Organization Tool billing</h3>
+          <p>Use the app free, or unlock the full workspace with Pro at {price}/month.</p>
+        </div>
+        <span className={cls("pill", isPro ? "pill--done" : "pill--pending")}>{isPro ? "Pro active" : "Free plan"}</span>
+      </section>
+
+      <section className="billing-grid">
+        <article className={cls("pricing-card", !isPro && "is-current")}>
+          <div className="pricing-card__head">
+            <span className="eyebrow">Free</span>
+            <strong>$0</strong>
+            <small>For trying the workspace</small>
+          </div>
+          <ul>
+            <li>{limits.projects} project</li>
+            <li>{limits.task_groups} task groups</li>
+            <li>{limits.tasks} tasks</li>
+            <li>Manual project and task editing</li>
+          </ul>
+          <button type="button" className="ghost-button" disabled>
+            {isPro ? "Available if canceled" : "Current plan"}
+          </button>
+        </article>
+
+        <article className={cls("pricing-card", "pricing-card--pro", isPro && "is-current")}>
+          <div className="pricing-card__head">
+            <span className="eyebrow">Pro</span>
+            <strong>{price}<small>/month</small></strong>
+            <small>For real teams and daily use</small>
+          </div>
+          <ul>
+            <li>Unlimited projects, task groups, and tasks</li>
+            <li>AI copilot actions for boards and task groups</li>
+            <li>Screenshot notes and installable mobile app</li>
+            <li>Stripe-hosted billing, invoices, and cancellation portal</li>
+          </ul>
+          {isPro ? (
+            <button type="button" onClick={onManageBilling} disabled={busy === "billing-portal" || !current.has_customer}>
+              {busy === "billing-portal" ? "Opening..." : "Manage subscription"}
+            </button>
+          ) : (
+            <button type="button" onClick={onStartCheckout} disabled={busy === "billing-checkout" || !current.stripe_configured}>
+              {busy === "billing-checkout" ? "Opening checkout..." : `Upgrade to Pro - ${price}/mo`}
+            </button>
+          )}
+          {!current.stripe_configured ? <p className="billing-warning">Stripe keys are not configured on the API yet.</p> : null}
+        </article>
+      </section>
+
+      <section className="panel billing-usage">
+        <div className="panel__head">
+          <div>
+            <span className="eyebrow">Usage</span>
+            <h3>Current workspace</h3>
+          </div>
+        </div>
+        <div className="billing-usage__grid">
+          <span><b>{projectCount}</b> Projects</span>
+          <span><b>{groupCount}</b> Task groups</span>
+          <span><b>{taskCount}</b> Tasks</span>
+          <span><b>{current.status || "free"}</b> Billing status</span>
+        </div>
+        {current.enforcement_enabled ? (
+          <p>Free limits are enforced by the API. Pro removes those limits.</p>
+        ) : (
+          <p>Free limits are visible but not enforced yet. Turn on enforcement when you are ready to sell publicly.</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function TaskCopilotPanel({
   board,
   boards,
@@ -3608,6 +3696,7 @@ export default function App() {
     settings: { permissions: [], pipeline_templates: [] },
     boards: [],
     activity: [],
+    billing: null,
   });
   const [session, setSession] = useState(() => loadSession());
   const [theme, setTheme] = useState(() => loadTheme());
@@ -3740,6 +3829,15 @@ export default function App() {
   }, [isAdmin, page]);
 
   useEffect(() => {
+    if (!currentUser || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("billing")) return;
+    setPage("billing");
+    refreshWorkspace();
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [currentUser?.id]);
+
+  useEffect(() => {
     setSidebarOpen(!isMobile);
   }, [isMobile]);
 
@@ -3870,6 +3968,48 @@ export default function App() {
     } catch (undoError) {
       setError(undoError.message || "Unable to undo that change");
       return false;
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function handleStartBillingCheckout() {
+    setBusy("billing-checkout");
+    setError("");
+    try {
+      const response = await createBillingCheckout({
+        success_url: `${window.location.origin}${window.location.pathname}?billing=success`,
+        cancel_url: `${window.location.origin}${window.location.pathname}?billing=cancelled`,
+      });
+      if (response?.billing) {
+        setData((current) => ({ ...current, billing: response.billing }));
+      }
+      if (response?.url) {
+        window.location.assign(response.url);
+      } else {
+        setError("Stripe did not return a checkout link");
+      }
+    } catch (billingError) {
+      setError(billingError.message || "Unable to start checkout");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function handleManageBilling() {
+    setBusy("billing-portal");
+    setError("");
+    try {
+      const response = await createBillingPortal({
+        return_url: `${window.location.origin}${window.location.pathname}?billing=return`,
+      });
+      if (response?.url) {
+        window.location.assign(response.url);
+      } else {
+        setError("Stripe did not return a billing portal link");
+      }
+    } catch (billingError) {
+      setError(billingError.message || "Unable to open billing portal");
     } finally {
       setBusy("");
     }
@@ -4196,7 +4336,7 @@ export default function App() {
     );
   }
 
-  const pageTitle = page === "dashboard" ? "Dashboard" : page === "project" ? activeBoard?.name || "Projects" : "Admin";
+  const pageTitle = page === "dashboard" ? "Dashboard" : page === "project" ? activeBoard?.name || "Projects" : page === "billing" ? "Billing" : "Admin";
   const pageCopy =
     page === "dashboard"
       ? isMobile
@@ -4206,9 +4346,13 @@ export default function App() {
         ? isMobile
           ? "Edit the board."
           : "Edit the board directly."
-        : isMobile
-          ? "Users and access."
-          : "Users, access, and preview mode.";
+        : page === "billing"
+          ? isMobile
+            ? "Plan and payment."
+            : "Free plan, Pro upgrade, and Stripe billing."
+          : isMobile
+            ? "Users and access."
+            : "Users, access, and preview mode.";
 
   return (
     <div className={cls("workspace-shell", isMobile && "workspace-shell--mobile")}>
@@ -4246,6 +4390,9 @@ export default function App() {
           ) : null}
           <button type="button" className={page === "project" ? "is-active" : ""} onClick={() => navigateTo("project")}>
             Projects
+          </button>
+          <button type="button" className={page === "billing" ? "is-active" : ""} onClick={() => navigateTo("billing")}>
+            Billing
           </button>
           {isAdmin ? (
             <button type="button" className={page === "admin" ? "is-active" : ""} onClick={() => navigateTo("admin")}>
@@ -4395,6 +4542,16 @@ export default function App() {
           />
         ) : null}
 
+        {page === "billing" ? (
+          <BillingView
+            billing={data.billing}
+            boards={visibleBoards}
+            busy={busy}
+            onStartCheckout={handleStartBillingCheckout}
+            onManageBilling={handleManageBilling}
+          />
+        ) : null}
+
         {page === "admin" && isAdmin ? (
           <AdminView
             data={data}
@@ -4435,8 +4592,8 @@ export default function App() {
               Admin
             </button>
           ) : (
-            <button type="button" onClick={() => setShowTutorial(true)}>
-              Help
+            <button type="button" className={page === "billing" ? "is-active" : ""} onClick={() => navigateTo("billing")}>
+              Billing
             </button>
           )}
         </nav>

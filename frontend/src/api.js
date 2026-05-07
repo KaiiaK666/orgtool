@@ -57,6 +57,14 @@ export function planCopilot(payload) {
   return request("/api/copilot/plan", { method: "POST", body: JSON.stringify(payload) });
 }
 
+export function createBillingCheckout(payload = {}) {
+  return request("/api/billing/checkout", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function createBillingPortal(payload = {}) {
+  return request("/api/billing/portal", { method: "POST", body: JSON.stringify(payload) });
+}
+
 export function undoActivity(activityId = null) {
   return request("/api/activity/undo", {
     method: "POST",
