@@ -334,6 +334,30 @@ function normalizePhrase(value = "") {
     .trim();
 }
 
+function normalizeCopilotInput(value = "") {
+  let text = String(value || "").replace(/\s+/g, " ").trim();
+  const replacements = [
+    [/\b(?:hey|yo|okay|ok|alright|so|um|uh|please)\s+(?:copilot|assistant|brain)?\b/gi, " "],
+    [/\b(?:could you|can you|would you|i want you to|i need you to)\b/gi, " "],
+    [/\b(?:gotta|gonna)\b/gi, "need to"],
+    [/\b(?:knocked out|knock out|wrapped up|wrap up|took care of|handled|handle|did|done with)\b/gi, "complete"],
+    [/\b(?:checked it off|check it off|crossed it off|cross it off)\b/gi, "complete"],
+    [/\b(?:scratch|scratch off|take off|take out)\b/gi, "remove"],
+    [/\b(?:delte|delet|dlete|remeove|remvoe|rmove)\b/gi, "delete"],
+    [/\b(?:complet|compleet|finsh|finshed)\b/gi, "complete"],
+    [/\b(?:pendng|pendin)\b/gi, "pending"],
+    [/\b(?:over due|pastdue)\b/gi, "overdue"],
+    [/\b(?:asap|right away|urgent|important|hot)\b/gi, "high priority"],
+    [/\b(?:not urgent|low key|whenever)\b/gi, "low priority"],
+    [/\b(?:push|bump|slide|scoot)\b/gi, "move"],
+    [/\b(?:shopping items|grocery items|groceries)\b/gi, "shopping list"],
+  ];
+  replacements.forEach(([pattern, replacement]) => {
+    text = text.replace(pattern, replacement);
+  });
+  return text.replace(/\s+/g, " ").trim();
+}
+
 const MATCH_STOPWORDS = new Set([
   "a",
   "an",
@@ -390,14 +414,14 @@ function spokenJoin(parts) {
 
 function statusFromWord(word = "") {
   const value = normalizePhrase(word);
-  if (["done", "complete", "completed", "finish", "finished", "check", "checked", "checked off", "check off", "cross off", "bought", "got", "grabbed", "purchased"].includes(value)) return "Done";
-  if (["pending", "open", "todo", "to do", "not done", "still need"].includes(value)) return "Pending";
-  if (["overdue", "late", "past due"].includes(value)) return "Overdue";
+  if (["done", "complete", "completed", "finish", "finished", "handled", "did", "wrapped up", "knocked out", "check", "checked", "checked off", "check off", "cross off", "bought", "got", "grabbed", "purchased"].includes(value)) return "Done";
+  if (["pending", "open", "todo", "to do", "not done", "not started", "still need", "needs work"].includes(value)) return "Pending";
+  if (["overdue", "late", "past due", "behind"].includes(value)) return "Overdue";
   return null;
 }
 
 function extractStatusMentions(text = "") {
-  return Array.from(String(text || "").matchAll(/\b(done|complete|completed|finish|finished|check(?:ed)?\s+off|cross\s+off|bought|got|grabbed|purchased|pending|open|to\s+do|todo|not\s+done|still\s+need|overdue|late|past\s+due)\b/gi))
+  return Array.from(String(text || "").matchAll(/\b(done|complete|completed|finish|finished|handled|did|wrapped\s+up|knocked\s+out|check(?:ed)?\s+off|cross\s+off|bought|got|grabbed|purchased|pending|open|to\s+do|todo|not\s+done|not\s+started|still\s+need|needs\s+work|overdue|late|past\s+due|behind)\b/gi))
     .map((match) => statusFromWord(match[1]))
     .filter(Boolean);
 }
@@ -427,6 +451,10 @@ function parseNaturalDate(value = "") {
   if (text === "tomorrow") return toIsoDate(addDays(today, 1));
   if (text === "this week") return toIsoDate(addDays(today, 3));
   if (text === "next week") return toIsoDate(addDays(today, 7));
+  if (["eod", "end of day", "by end of day"].includes(text)) return toIsoDate(today);
+  if (["end of week", "by end of week"].includes(text)) return toIsoDate(addDays(today, Math.max(0, 5 - today.getDay())));
+  const inDaysMatch = text.match(/^in\s+(\d{1,2})\s+days?$/i);
+  if (inDaysMatch) return toIsoDate(addDays(today, Number(inDaysMatch[1])));
 
   const weekdayMatch = text.match(/^(?:next\s+|this\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i);
   if (weekdayMatch) {
@@ -508,8 +536,36 @@ function findGroupMention(board, text, fallbackGroup = null) {
   return fallbackGroup;
 }
 
+function cleanReferenceText(value = "") {
+  return String(value || "")
+    .replace(/\b(?:the|a|an|my|this|that|task|item|thing|one)\b/gi, " ")
+    .replace(/\b(?:as|to|into|with|priority|status|done|complete|completed|pending|open|overdue|critical|high|medium|low)\b.*$/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractTaskReference(text = "") {
+  const patterns = [
+    /\b(?:mark|set|change|make)\s+(.+?)\s+(?:as|to|into)?\s*(?:done|complete|completed|pending|open|overdue|late|critical|high|medium|low|priority)\b/i,
+    /\b(?:complete|finish|finished|got|bought|grabbed|purchased|check(?:ed)?\s+off|cross(?:ed)?\s+off)\s+(?:the\s+)?(.+)$/i,
+    /\b(?:delete|remove|clear|erase|trash)\s+(?:the\s+)?(.+?)(?:\s+(?:off|out of|from)\s+(?:the\s+)?(?:list|group))?$/i,
+    /\b(?:move|reschedule)\s+(?:the\s+)?(.+?)\s+(?:to|for|on|by)\s+.+$/i,
+    /\b(?:assign|give)\s+(?:the\s+)?(.+?)\s+(?:to|for)\s+.+$/i,
+    /\b(?:add|append|update)\s+(?:a\s+)?note\s+(?:to|for|on)\s+(.+?)\s*(?:that says|saying|:|-)\s+.+$/i,
+    /\b(?:rename)\s+(?:the\s+)?(.+?)\s+to\s+.+$/i,
+  ];
+  for (const pattern of patterns) {
+    const match = String(text || "").match(pattern);
+    if (!match) continue;
+    const candidate = cleanReferenceText(match[1]);
+    if (candidate && !/\b(all|every|everything|whole|entire|tasks?|items?|stuff)\b/i.test(candidate)) return candidate;
+  }
+  return "";
+}
+
 function findTaskMention(board, text) {
-  return findNamedMatch(board?.tasks || [], text, "name");
+  const reference = extractTaskReference(text);
+  return (reference ? findNamedMatch(board?.tasks || [], reference, "name") : null) || findNamedMatch(board?.tasks || [], text, "name");
 }
 
 function findBoardMention(boards, text, fallbackBoard = null) {
@@ -546,17 +602,21 @@ function hasColumnIntent(text = "") {
 }
 
 function hasCreateIntent(text = "") {
-  return /\b(?:create|add|new|make|start|set up|need|remember|remind|put)\b/i.test(text);
+  return /\b(?:create|add|new|make|start|set up|need|should|have to|remember|remind|put)\b/i.test(text);
 }
 
 function priorityFromWord(word = "") {
   const value = String(word || "").toLowerCase();
+  if (["critical", "emergency", "fire drill", "top priority", "highest priority"].includes(value)) return "Critical";
+  if (["urgent", "asap", "right away", "important", "hot"].includes(value)) return "High";
+  if (["normal", "regular"].includes(value)) return "Medium";
+  if (["not urgent", "low key", "whenever", "back burner"].includes(value)) return "Low";
   if (["critical", "high", "medium", "low"].includes(value)) return sentenceCase(value);
   return null;
 }
 
 function extractPriorityMentions(text = "") {
-  return Array.from(String(text || "").matchAll(/\b(critical|high|medium|low)\b/gi))
+  return Array.from(String(text || "").matchAll(/\b(critical|emergency|fire drill|top priority|highest priority|high|urgent|asap|right away|important|hot|medium|normal|regular|low|not urgent|low key|whenever|back burner)\b/gi))
     .map((match) => priorityFromWord(match[1]))
     .filter(Boolean);
 }
@@ -698,7 +758,7 @@ function buildShoppingListPlan(input, board, currentUser) {
 
 function extractDateMention(text = "") {
   const match = String(text || "").match(
-    /\b(today|tonight|tomorrow|this week|next week|next\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|(?:this\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|\d{4}-\d{2}-\d{2})\b/i
+    /\b(eod|end of day|by end of day|end of week|by end of week|in\s+\d{1,2}\s+days?|today|tonight|tomorrow|this week|next week|next\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|(?:this\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|\d{4}-\d{2}-\d{2})\b/i
   );
   if (!match) return { dueDate: null, raw: "" };
   return { dueDate: parseNaturalDate(match[1]), raw: match[1] };
@@ -738,8 +798,8 @@ function stripGroupMention(text = "", group = null) {
 function cleanNaturalTaskName(text = "", group = null) {
   const { raw } = extractDateMention(text);
   return sentenceCase(
-    stripGroupMention(stripDateMention(text, raw), group)
-      .replace(/\b(?:and\s+make\s+it|make\s+it|set\s+it|mark\s+it|hey|okay|ok|please|can you|could you|would you|i need to|need to|i need|remember to|remind me to|don't forget to|dont forget to|make sure to|add|create|make|new|put|start|set up|todo|to do|task|item|thing|for me)\b/gi, " ")
+    stripGroupMention(stripDateMention(normalizeCopilotInput(text), raw), group)
+      .replace(/\b(?:and\s+make\s+it|make\s+it|set\s+it|mark\s+it|hey|okay|ok|please|can you|could you|would you|i should|we should|should|i have to|we have to|have to|i need to|we need to|need to|i need|we need|remember to|remind me to|don't forget to|dont forget to|make sure to|add|create|make|new|put|start|set up|todo|to do|task|item|thing|for me)\b/gi, " ")
       .replace(/\b(?:critical|high|medium|low|priority|pending|open|done|complete|completed|finished|overdue|late|past due)\b/gi, " ")
       .replace(/[.?!]+$/g, "")
       .replace(/\s+/g, " ")
@@ -763,8 +823,9 @@ function tasksForGroup(board, group) {
 }
 
 function buildNaturalStatusPlan(input, board, currentUser) {
+  const statusMentions = extractStatusMentions(input);
   const targetStatus =
-    extractStatusMentions(input).slice(-1)[0] ||
+    statusMentions.slice(-1)[0] ||
     (/\b(?:finish|finished|complete|completed|check(?:ed)?\s+off|cross\s+off|got|bought|grabbed|purchased|done with)\b/i.test(input) ? "Done" : null);
   if (!targetStatus) return null;
 
@@ -786,7 +847,11 @@ function buildNaturalStatusPlan(input, board, currentUser) {
   }
 
   if (group?.id && /\b(?:all|everything|whole|entire|list|group|stuff|items?)\b/i.test(input)) {
-    const candidates = tasksForGroup(board, group).filter((entry) => entry.status !== targetStatus);
+    const sourceStatus = statusMentions.length > 1 && statusMentions[0] !== targetStatus ? statusMentions[0] : null;
+    const candidates = tasksForGroup(board, group).filter((entry) => {
+      if (sourceStatus && entry.status !== sourceStatus && visualStatus(entry) !== sourceStatus) return false;
+      return entry.status !== targetStatus;
+    });
     if (!candidates.length) {
       return { mode: "answer", message: `${group.name} already looks ${targetStatus.toLowerCase()}.` };
     }
@@ -796,7 +861,7 @@ function buildNaturalStatusPlan(input, board, currentUser) {
         taskIds: candidates.map((entry) => entry.id),
         taskCount: candidates.length,
         groupName: group.name,
-        sourceStatus: null,
+        sourceStatus,
         changes: { status: targetStatus },
       },
     ];
@@ -814,6 +879,26 @@ function buildNaturalDeletePlan(input, board) {
   if (!hasDeleteIntent(input) && !/\b(?:take|remove)\s+.+\s+(?:off|out of|from)\b/i.test(input)) return null;
   const group = findGroupMention(board, input);
   const task = findTaskMention(board, input);
+  if (/\b(done|complete|completed|finished|checked off|completed tasks?|done tasks?)\b/i.test(input)) {
+    if (!group?.id && /\b(?:in|inside|under|from)\s+(?!me\b|my\b)([a-z][a-z0-9 -]{1,80})/i.test(input)) return null;
+    const doneTasks = tasksForGroup(board, group).filter((entry) => entry.status === "Done");
+    if (doneTasks.length) {
+      const operations = [
+        {
+          type: "bulk-delete-tasks",
+          taskIds: doneTasks.map((entry) => entry.id),
+          taskCount: doneTasks.length,
+          groupName: group?.name || "",
+          sourceStatus: "Done",
+        },
+      ];
+      return {
+        mode: "proposal",
+        operations,
+        message: `Say yes if you want me to ${describeAssistantOperation(operations[0])}.`,
+      };
+    }
+  }
   if (task?.id) {
     const operations = [{ type: "delete-task", taskId: task.id, taskName: task.name }];
     return {
@@ -1040,7 +1125,8 @@ function parseAssistantClause(clause, board, currentUser, context = {}, workspac
   const task = findTaskMention(board, workingText);
   const targetBoard = findBoardMention(boards, workingText, board);
 
-  if (hasDeleteIntent(workingText) && (hasGroupIntent(workingText) || group?.id)) {
+  const wantsTaskCleanup = /\b(tasks?|items?|done|complete|completed|pending|overdue|list)\b/i.test(workingText);
+  if (hasDeleteIntent(workingText) && (hasGroupIntent(workingText) || (group?.id && !wantsTaskCleanup && !task?.id))) {
     if (/\ball\b/i.test(lower)) {
       const groups = board?.groups || [];
       if (groups.length) {
@@ -1472,15 +1558,23 @@ function describeAssistantOperation(operation) {
 }
 
 function buildAssistantPlan(input, board, currentUser, workspace = {}) {
-  const readOnlyResponse = buildReadOnlyAssistantResponse(input, board, currentUser);
+  const normalizedInput = normalizeCopilotInput(input);
+  if (/\b(what can you do|what do|help|how do i talk|examples?|commands?)\b/i.test(normalizedInput)) {
+    return {
+      mode: "answer",
+      message:
+        'Talk normally. Examples: "I need milk eggs bread", "I handled trainer schedule", "push trainer schedule to Friday", "make flyer urgent", "clear completed tasks in shopping", or "start a Natasha group with call list and flyers". I will ask before changing anything.',
+    };
+  }
+  const readOnlyResponse = buildReadOnlyAssistantResponse(normalizedInput, board, currentUser);
   if (readOnlyResponse) {
     return { mode: "answer", message: readOnlyResponse };
   }
 
-  const shoppingListPlan = buildShoppingListPlan(input, board, currentUser);
+  const shoppingListPlan = buildShoppingListPlan(normalizedInput, board, currentUser);
   if (shoppingListPlan) return shoppingListPlan;
 
-  const clauses = splitAssistantClauses(input);
+  const clauses = splitAssistantClauses(normalizedInput);
   const operations = [];
   let context = { group: null };
 
@@ -1492,10 +1586,10 @@ function buildAssistantPlan(input, board, currentUser, workspace = {}) {
   }
 
   if (!operations.length) {
-    const naturalPlan = buildNaturalAssistantPlan(input, board, currentUser, workspace);
+    const naturalPlan = buildNaturalAssistantPlan(normalizedInput, board, currentUser, workspace);
     if (naturalPlan) return naturalPlan;
 
-    if (hasDeleteIntent(input) && (hasGroupIntent(input) || findGroupMention(board, input))) {
+    if (hasDeleteIntent(normalizedInput) && (hasGroupIntent(normalizedInput) || findGroupMention(board, normalizedInput))) {
       return {
         mode: "answer",
         message: 'I can remove task groups too. Try "delete Natasha", "delete the Natasha group", or "delete all task groups" and I will ask for confirmation before I change the board.',
@@ -2194,15 +2288,15 @@ function TaskCopilotPanel({
   const recognitionRef = useRef(null);
   const samplePrompts = isMobile
     ? [
-        "I need groceries: milk, eggs, bread",
-        "Got milk",
-        "Call Miguel tomorrow",
+        "I need milk eggs bread",
+        "I handled trainer schedule",
+        "Move flyer to Friday",
       ]
     : [
-        "I need groceries: milk, eggs, bread",
-        "Finish everything in shopping",
-        "Take eggs off the list",
-        "Call Miguel tomorrow and make it high priority",
+        "I need groceries milk eggs bread",
+        "Clear completed tasks in shopping",
+        "Push trainer schedule to Friday",
+        "Make flyer urgent",
         "Create a Natasha group with call list, flyers, and schedule",
         "What should I handle first?",
       ];
@@ -2213,7 +2307,7 @@ function TaskCopilotPanel({
     setHistory([
       {
         role: "assistant",
-        text: `I'm watching ${board?.name || "this board"}. Talk normally; I'll translate it and ask before changing the board.`,
+        text: `I'm watching ${board?.name || "this board"}. Talk naturally: quick thoughts, messy voice notes, and shorthand are fine. I will ask before I change anything.`,
       },
     ]);
     setPendingPlan(null);
@@ -2498,7 +2592,7 @@ function TaskCopilotPanel({
       </div>
 
       <p className="copilot-panel__lead">
-        Talk naturally. I can add tasks, make lists, change dates, mark work done, move items, add notes, create task groups, and answer what needs attention.
+        Talk naturally. I can turn voice notes into tasks, move dates, mark work done, clean completed items, change priority, add notes, build task groups, and answer what needs attention.
       </p>
 
       {showExamples ? (
@@ -2541,7 +2635,7 @@ function TaskCopilotPanel({
         <textarea
           rows={isMobile ? 2 : 3}
           value={draft}
-          placeholder={isMobile ? 'Say: "Call Miguel tomorrow"' : 'Example: "Create a shopping list with milk, eggs, and bread."'}
+          placeholder={isMobile ? 'Say: "I handled trainer schedule"' : 'Example: "Push trainer schedule to Friday and make flyer urgent."'}
           onChange={(event) => setDraft(event.target.value)}
         />
         <button type="submit" disabled={!draft.trim() || running}>
