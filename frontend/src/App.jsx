@@ -538,16 +538,47 @@ function cleanShoppingItem(value = "") {
   );
 }
 
+const COMMON_SINGLE_WORD_ITEMS = new Set([
+  "milk",
+  "eggs",
+  "bread",
+  "bananas",
+  "apples",
+  "water",
+  "cheese",
+  "butter",
+  "rice",
+  "beans",
+  "coffee",
+  "cream",
+  "sugar",
+  "lettuce",
+  "tomatoes",
+  "onions",
+  "chicken",
+  "beef",
+  "paper",
+  "towels",
+  "soap",
+]);
+
 function splitShoppingItems(value = "") {
   const text = String(value || "")
     .replace(/[.?!]+$/g, "")
     .replace(/\b(?:with|for|including|include|of|that has|to have|containing)\b\s*/i, "")
     .trim();
 
-  return text
+  const items = text
     .split(/\s*(?:,|;|\n|\band\b|\bplus\b)\s*/i)
     .map(cleanShoppingItem)
     .filter((item) => item.length > 1 && !["Shopping", "List", "Grocery"].includes(item));
+  if (items.length === 1) {
+    const tokens = normalizePhrase(items[0]).split(" ");
+    if (tokens.length >= 2 && tokens.length <= 8 && tokens.every((token) => COMMON_SINGLE_WORD_ITEMS.has(token))) {
+      return tokens.map(sentenceCase);
+    }
+  }
+  return items;
 }
 
 function extractShoppingItems(input = "") {
@@ -561,6 +592,9 @@ function extractShoppingItems(input = "") {
   const needGroceriesMatch = text.match(/\b(?:need|buy|get|grab|pick\s+up)\s+(?:some\s+)?(?:groceries|grocery|shopping)\s*(.+)$/i);
   if (needGroceriesMatch) return splitShoppingItems(needGroceriesMatch[1]);
 
+  const storeMatch = text.match(/\b(?:need|buy|get|grab|pick\s+up)\s+(.+?)\s+(?:from|at)\s+(?:heb|walmart|costco|the\s+store|store)\b/i);
+  if (storeMatch) return splitShoppingItems(storeMatch[1]);
+
   const afterListMatch = text.match(/\b(?:shopping|grocery)\s+list\b\s*(.*)$/i);
   if (afterListMatch) return splitShoppingItems(afterListMatch[1]);
 
@@ -573,6 +607,8 @@ function buildShoppingListPlan(input, board, currentUser) {
   const group =
     (board.groups || []).find((entry) => normalizePhrase(entry.name) === normalizePhrase(SHOPPING_LIST_GROUP_NAME)) || null;
   const items = extractShoppingItems(input);
+  const canCreateEmptyList = /\b(?:create|add|make|start|set up|new)\b.*\b(?:shopping|grocery).*list\b/i.test(input);
+  if (!items.length && !canCreateEmptyList) return null;
   const operations = [];
 
   if (!group) {
@@ -665,8 +701,8 @@ function cleanNaturalTaskName(text = "", group = null) {
   const { raw } = extractDateMention(text);
   return sentenceCase(
     stripGroupMention(stripDateMention(text, raw), group)
-      .replace(/\b(?:hey|okay|ok|please|can you|could you|would you|i need to|need to|i need|remember to|remind me to|don't forget to|dont forget to|make sure to|add|create|make|new|put|start|set up|todo|to do|task|item|thing|for me)\b/gi, " ")
-      .replace(/\b(?:critical|high|medium|low|pending|open|done|complete|completed|finished|overdue|late|past due)\b/gi, " ")
+      .replace(/\b(?:and\s+make\s+it|make\s+it|set\s+it|mark\s+it|hey|okay|ok|please|can you|could you|would you|i need to|need to|i need|remember to|remind me to|don't forget to|dont forget to|make sure to|add|create|make|new|put|start|set up|todo|to do|task|item|thing|for me)\b/gi, " ")
+      .replace(/\b(?:critical|high|medium|low|priority|pending|open|done|complete|completed|finished|overdue|late|past due)\b/gi, " ")
       .replace(/[.?!]+$/g, "")
       .replace(/\s+/g, " ")
       .trim()
@@ -791,7 +827,7 @@ function buildNaturalDatePlan(input, board) {
   };
 }
 
-function buildNaturalGroupCreatePlan(input, board) {
+function buildNaturalGroupCreatePlan(input, board, currentUser) {
   if (!board || !hasCreateIntent(input)) return null;
   if (!/\b(?:create|make|start|set up|new)\b/i.test(input)) return null;
   if (!/\b(task\s+group|group|section|lane|list)\b/i.test(input)) return null;
@@ -821,11 +857,27 @@ function buildNaturalGroupCreatePlan(input, board) {
     name,
     color: /\bshopping|grocery|groceries|heb|walmart|costco\b/i.test(input) ? SHOPPING_LIST_COLOR : board.color || "#3156f5",
   };
+  const extraMatch = String(input || "").match(/\b(?:with|including|that has|and add)\s+(.+)$/i);
+  const extraTasks = extraMatch ? splitShoppingItems(extraMatch[1]) : [];
+  const operations = [
+    operation,
+    ...extraTasks.map((taskName) => ({
+      type: "create-task",
+      groupId: null,
+      groupName: name,
+      name: taskName,
+      status: "Pending",
+      dueDate: null,
+      ownerId: currentUser?.id ?? null,
+      priority: "Medium",
+      notes: "",
+    })),
+  ];
 
   return {
     mode: "proposal",
-    operations: [operation],
-    message: `Say yes if you want me to ${describeAssistantOperation(operation)}.`,
+    operations,
+    message: `Say yes if you want me to ${spokenJoin(operations.map(describeAssistantOperation))}.`,
   };
 }
 
@@ -875,7 +927,7 @@ function buildNaturalAssistantPlan(input, board, currentUser, workspace = {}) {
     buildNaturalDeletePlan(input, board) ||
     buildNaturalStatusPlan(input, board, currentUser) ||
     buildNaturalDatePlan(input, board) ||
-    buildNaturalGroupCreatePlan(input, board) ||
+    buildNaturalGroupCreatePlan(input, board, currentUser) ||
     buildNaturalTaskCreatePlan(input, board, currentUser, workspace)
   );
 }
@@ -2098,16 +2150,17 @@ function TaskCopilotPanel({
   const recognitionRef = useRef(null);
   const samplePrompts = isMobile
     ? [
-        "I need groceries: milk, eggs, and bread",
+        "I need groceries: milk, eggs, bread",
         "Got milk",
-        "Remember to call Miguel tomorrow",
+        "Call Miguel tomorrow",
       ]
     : [
-        "I need groceries: milk, eggs, and bread",
+        "I need groceries: milk, eggs, bread",
         "Finish everything in shopping",
         "Take eggs off the list",
-        "Remember to call Miguel tomorrow",
-        "Mark all pending tasks in Queue as complete",
+        "Call Miguel tomorrow and make it high priority",
+        "Create a Natasha group with call list, flyers, and schedule",
+        "What should I handle first?",
       ];
   const visibleHistory = isMobile ? history.slice(-2) : history;
   const showThread = !isMobile || history.length > 1 || Boolean(pendingPlan);
@@ -2116,7 +2169,7 @@ function TaskCopilotPanel({
     setHistory([
       {
         role: "assistant",
-        text: `I'm watching ${board?.name || "this board"}. Tell me what to change and I'll ask before I edit the real board.`,
+        text: `I'm watching ${board?.name || "this board"}. Talk normally; I'll translate it and ask before changing the board.`,
       },
     ]);
     setPendingPlan(null);
@@ -2240,6 +2293,7 @@ function TaskCopilotPanel({
         if (operation.type === "create-task") {
           const targetGroup =
             (operation.groupId && (board.groups || []).find((entry) => Number(entry.id) === Number(operation.groupId))) ||
+            (operation.groupName && findGroupMention(board, operation.groupName)) ||
             (operation.groupName && createdGroups.get(normalizePhrase(operation.groupName))) ||
             activeGroup ||
             board.groups?.[0];
@@ -2324,7 +2378,10 @@ function TaskCopilotPanel({
     } finally {
       setRunning(false);
     }
-    plan = plan || buildAssistantPlan(message, board, currentUser, { users, boards });
+    const localPlan = buildAssistantPlan(message, board, currentUser, { users, boards });
+    if (!plan || (plan.mode === "answer" && localPlan?.mode === "proposal")) {
+      plan = localPlan;
+    }
     if (plan.mode === "proposal") {
       setPendingPlan(plan);
       reply(plan.message);
@@ -2397,7 +2454,7 @@ function TaskCopilotPanel({
       </div>
 
       <p className="copilot-panel__lead">
-        Create or update projects, task groups, tasks, dates, notes, owners, and columns from one prompt.
+        Talk naturally. I can add tasks, make lists, change dates, mark work done, move items, add notes, create task groups, and answer what needs attention.
       </p>
 
       {showExamples ? (
@@ -2440,7 +2497,7 @@ function TaskCopilotPanel({
         <textarea
           rows={isMobile ? 2 : 3}
           value={draft}
-          placeholder={isMobile ? 'Say: "I need groceries: milk, eggs"' : 'Example: "Remember to call Miguel tomorrow."'}
+          placeholder={isMobile ? 'Say: "Call Miguel tomorrow"' : 'Example: "Create a shopping list with milk, eggs, and bread."'}
           onChange={(event) => setDraft(event.target.value)}
         />
         <button type="submit" disabled={!draft.trim() || running}>
