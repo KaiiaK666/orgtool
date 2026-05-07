@@ -334,6 +334,42 @@ function normalizePhrase(value = "") {
     .trim();
 }
 
+const MATCH_STOPWORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "as",
+  "all",
+  "complete",
+  "completed",
+  "create",
+  "date",
+  "done",
+  "due",
+  "for",
+  "group",
+  "high",
+  "in",
+  "it",
+  "list",
+  "low",
+  "make",
+  "mark",
+  "medium",
+  "new",
+  "on",
+  "open",
+  "pending",
+  "priority",
+  "set",
+  "status",
+  "task",
+  "the",
+  "to",
+  "tomorrow",
+  "with",
+]);
+
 function sentenceCase(value = "") {
   const text = String(value || "").trim();
   if (!text) return "";
@@ -440,9 +476,11 @@ function findNamedMatch(items, text, field = "name") {
     } else if (haystack.includes(name)) {
       score = 600 + name.length;
     } else {
-      const tokens = name.split(" ").filter(Boolean);
-      const matched = tokens.filter((token) => haystack.includes(token)).length;
-      if (matched && matched >= Math.ceil(tokens.length / 2)) score = matched * 20 + name.length;
+      const haystackTokens = new Set(haystack.split(" ").filter((token) => token && !MATCH_STOPWORDS.has(token)));
+      const tokens = name.split(" ").filter((token) => token && !MATCH_STOPWORDS.has(token));
+      const matched = tokens.filter((token) => haystackTokens.has(token)).length;
+      const required = tokens.length <= 1 ? 1 : Math.max(2, Math.ceil(tokens.length / 2));
+      if (matched && matched >= required) score = matched * 20 + name.length;
     }
 
     if (score > bestScore) {
