@@ -5958,3 +5958,143 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Foundation pass: mobile-safe inputs, cleaner dashboard cards, and tighter task rows. */
+.panel--activity .activity-row {
+  cursor: default;
+}
+
+.panel--activity .activity-row .ghost-button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border-radius: 11px;
+  white-space: nowrap;
+}
+
+.project-card--dashboard {
+  color: var(--text);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--project-accent)) 0%, var(--surface) 68%),
+    var(--surface);
+  border-color: color-mix(in srgb, var(--project-accent) 22%, var(--line));
+}
+
+.project-card--dashboard strong,
+.project-card--dashboard p,
+.project-card--dashboard small,
+.project-card--dashboard .project-card__stats,
+.project-card--dashboard .project-card__footer {
+  color: inherit;
+}
+
+.project-card--dashboard p,
+.project-group-row__meta,
+.project-card__footer small {
+  color: var(--muted);
+}
+
+.project-group-row {
+  background: color-mix(in srgb, var(--surface-muted) 72%, transparent);
+  border: 1px solid var(--line);
+}
+
+.task-row {
+  --row-rail: var(--line-strong);
+}
+
+.task-row--overdue {
+  --row-bg: color-mix(in srgb, var(--danger-bg) 34%, var(--surface));
+  --row-border: color-mix(in srgb, var(--danger-line) 34%, var(--line));
+  --row-rail: var(--danger-line);
+}
+
+.task-row--pending {
+  --row-bg: color-mix(in srgb, var(--pending-bg) 34%, var(--surface));
+  --row-border: color-mix(in srgb, var(--pending-line) 30%, var(--line));
+  --row-rail: var(--pending-line);
+}
+
+.task-row--done {
+  --row-bg: color-mix(in srgb, var(--success-bg) 34%, var(--surface));
+  --row-border: color-mix(in srgb, var(--success-line) 32%, var(--line));
+  --row-rail: var(--success-line);
+}
+
+.board-table {
+  border-spacing: 0 5px;
+}
+
+.task-row td {
+  background: var(--row-bg);
+  border-top: 1px solid var(--row-border);
+  border-bottom: 1px solid var(--row-border);
+}
+
+.task-row td:first-child {
+  border-left: 6px solid var(--row-rail);
+}
+
+.task-row .cell-input,
+.task-row .cell-select {
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+@media (max-width: 900px) {
+  .workspace-shell--mobile,
+  .workspace-shell--mobile .main-panel,
+  .workspace-shell--mobile .project-board,
+  .workspace-shell--mobile .dashboard-view {
+    width: 100%;
+    max-width: 100vw;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .workspace-shell--mobile input,
+  .workspace-shell--mobile select,
+  .workspace-shell--mobile textarea,
+  .login-screen input,
+  .login-screen select,
+  .login-screen textarea {
+    font-size: 16px;
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stat-card {
+    min-width: 0;
+  }
+
+  .mobile-task-card__summary-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .mobile-task-card__summary-row .cell-input--task {
+    min-width: 0;
+  }
+
+  .mobile-task-card__details-toggle {
+    padding-inline: 9px;
+  }
+
+  .project-card--dashboard {
+    background: var(--surface);
+  }
+}
+
+@media (max-width: 520px) {
+  .login-shell {
+    max-width: 420px;
+    margin-inline: auto;
+  }
+
+  .login-shell__card {
+    box-shadow: none;
+  }
+
+  .login-form {
+    gap: 11px;
+  }
+}

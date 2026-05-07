@@ -45,8 +45,23 @@ export function getBootstrap() {
   return request("/api/bootstrap");
 }
 
+export function getActivity() {
+  return request("/api/activity").then(unwrap("activity"));
+}
+
 export function login(payload) {
   return request("/api/login", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function planCopilot(payload) {
+  return request("/api/copilot/plan", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function undoActivity(activityId = null) {
+  return request("/api/activity/undo", {
+    method: "POST",
+    body: JSON.stringify(activityId ? { activity_id: activityId } : {}),
+  });
 }
 
 export function createStore(payload) {

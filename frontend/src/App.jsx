@@ -11,6 +11,8 @@ import {
   deleteUser,
   getBootstrap,
   login,
+  planCopilot,
+  undoActivity,
   updateBoard,
   updateGroup,
   updateTask,
@@ -23,7 +25,7 @@ const COLUMN_WIDTHS_KEY_PREFIX = "orgtool-column-widths";
 const GROUP_PREFS_KEY_PREFIX = "orgtool-group-prefs";
 const LOGO_SRC = "/organization-tool-mark.png";
 const MOBILE_LAYOUT_QUERY = "(max-width: 900px)";
-const DEFAULT_LOGIN_USERNAME = "kaiammons";
+const DEFAULT_LOGIN_USERNAME = "kai";
 const SHOPPING_LIST_GROUP_NAME = "Shopping List";
 const SHOPPING_LIST_COLOR = "#16a34a";
 const STATUS_OPTIONS = ["Overdue", "Pending", "Done"];
@@ -220,6 +222,13 @@ function formatDate(value) {
   const parsed = new Date(`${value}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return value;
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(parsed);
+}
+
+function formatActivityTime(value) {
+  if (!value) return "Just now";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Recent";
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(parsed);
 }
 
 function readFileAsDataUrl(file) {
@@ -1751,7 +1760,7 @@ function LoginScreen({
   );
 }
 
-function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
+function DashboardView({ currentUser, boards, announcements, activity = [], onUndoActivity, busy, onOpenBoard }) {
   const myTasks = sortTasks(
     boards.flatMap((board) =>
       board.tasks
@@ -1764,6 +1773,7 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
   const dueSoon = myTasks.filter((task) => task.due_date && task.due_date >= today).slice(0, 5);
   const urgent = myTasks.filter((task) => ["Critical", "High"].includes(task.priority));
   const pinned = announcements.filter((item) => item.pinned);
+  const recentActivity = [...activity].reverse().slice(0, 5);
 
   return (
     <div className="dashboard-view">
@@ -1837,6 +1847,41 @@ function DashboardView({ currentUser, boards, announcements, onOpenBoard }) {
               ))
             ) : (
               <div className="empty-state">No pinned notes right now.</div>
+            )}
+          </div>
+        </section>
+
+        <section className="panel panel--dashboard panel--activity">
+          <div className="panel__head">
+            <div>
+              <span className="eyebrow">Recent</span>
+              <h3>Changes</h3>
+            </div>
+            {recentActivity.length ? (
+              <button type="button" className="ghost-button" onClick={() => onUndoActivity?.()} disabled={busy === "undo-latest"}>
+                Undo latest
+              </button>
+            ) : null}
+          </div>
+          <div className="activity-list">
+            {recentActivity.length ? (
+              recentActivity.map((item) => (
+                <div key={item.id} className={cls("activity-row", "activity-row--change")}>
+                  <div>
+                    <strong>{item.label}</strong>
+                    <small>{formatActivityTime(item.at)}</small>
+                  </div>
+                  {item.undone ? (
+                    <span className="pill">Undone</span>
+                  ) : (
+                    <button type="button" className="ghost-button" onClick={() => onUndoActivity?.(item.id)} disabled={busy === `undo-${item.id}`}>
+                      Undo
+                    </button>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="empty-state">No changes yet.</div>
             )}
           </div>
         </section>
@@ -1951,6 +1996,8 @@ function TaskCopilotPanel({
   onUpdateGroup,
   onDeleteGroup,
   onCreateField,
+  onPlanCopilot,
+  onAfterPlan,
   isMobile,
 }) {
   const [draft, setDraft] = useState("");
@@ -2078,7 +2125,7 @@ function TaskCopilotPanel({
         }
 
         if (operation.type === "create-group") {
-          const group = await onCreateGroup(operation.name, operation.color || board.color || "#3156f5");
+          const group = await onCreateGroup(operation.name, operation.color || board.color || "#3156f5", operation.mode || operation.displayMode || "auto");
           if (group) {
             createdGroups.set(normalizePhrase(operation.name), group);
             activeGroup = group;
@@ -2154,6 +2201,7 @@ function TaskCopilotPanel({
 
       setPendingPlan(null);
       reply(results.length ? spokenJoin(results) : "Done. I made the requested changes.");
+      onAfterPlan?.();
     } catch (error) {
       reply(error?.message || "I could not finish that change.");
     } finally {
@@ -2161,7 +2209,7 @@ function TaskCopilotPanel({
     }
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     const message = draft.trim();
     if (!message) return;
@@ -2179,7 +2227,16 @@ function TaskCopilotPanel({
       return;
     }
 
-    const plan = buildAssistantPlan(message, board, currentUser, { users, boards });
+    setRunning(true);
+    let plan = null;
+    try {
+      plan = await onPlanCopilot?.(message);
+    } catch {
+      plan = null;
+    } finally {
+      setRunning(false);
+    }
+    plan = plan || buildAssistantPlan(message, board, currentUser, { users, boards });
     if (plan.mode === "proposal") {
       setPendingPlan(plan);
       reply(plan.message);
@@ -2514,6 +2571,8 @@ function MobileTaskCard({ task, board, users, onUpdateTask, group, groupMode }) 
   const isNotesGroup = groupMode === "notes";
   const hasNotes = Boolean(String(task.notes || "").trim()) || Boolean(task.screenshots?.length);
   const owner = users.find((user) => Number(user.id) === Number(task.owner_id));
+  const hasCustomFields = Boolean(board.fields?.length);
+  const showDetailsButton = !isChecklistGroup || hasNotes || task.due_date || hasCustomFields || detailsOpen;
 
   function toggleDone() {
     saveField("status", isDone ? "Pending" : "Done");
@@ -2531,9 +2590,11 @@ function MobileTaskCard({ task, board, users, onUpdateTask, group, groupMode }) 
           {isDone ? "✓" : ""}
         </button>
         <input className="cell-input cell-input--task" defaultValue={task.name} onBlur={(event) => saveField("name", event.target.value.trim())} />
-        <button type="button" className="mobile-task-card__details-toggle" onClick={() => setDetailsOpen((current) => !current)}>
-          {detailsOpen ? "Hide" : isChecklistGroup ? "More" : "Details"}
-        </button>
+        {showDetailsButton ? (
+          <button type="button" className="mobile-task-card__details-toggle" onClick={() => setDetailsOpen((current) => !current)}>
+            {detailsOpen ? "Hide" : isChecklistGroup ? "Note" : "Details"}
+          </button>
+        ) : null}
       </div>
 
       {!isChecklistGroup || rowStatus !== "Pending" || task.due_date || hasNotes ? (
@@ -2656,6 +2717,8 @@ function ProjectBoard({
   onDeleteGroup,
   onCreateField,
   onUpdateBoard,
+  onPlanCopilot,
+  onAfterPlan,
   isMobile,
 }) {
   const [search, setSearch] = useState("");
@@ -2767,7 +2830,7 @@ function ProjectBoard({
     event.preventDefault();
     const name = groupDraft.name.trim();
     if (!name) return;
-    onCreateGroup(name, groupDraft.color).then((group) => {
+    onCreateGroup(name, groupDraft.color, groupDraft.mode).then((group) => {
       if (group?.id && groupDraft.mode !== "auto") {
         setGroupPrefs((current) => ({
           ...current,
@@ -2813,6 +2876,7 @@ function ProjectBoard({
     onUpdateGroup(group.id, {
       name,
       color: draft.color,
+      mode: draft.mode || "auto",
     });
     setGroupPrefs((current) => ({
       ...current,
@@ -2878,6 +2942,8 @@ function ProjectBoard({
         onUpdateGroup={onUpdateGroup}
         onDeleteGroup={onDeleteGroup}
         onCreateField={onCreateField}
+        onPlanCopilot={onPlanCopilot}
+        onAfterPlan={onAfterPlan}
         isMobile={isMobile}
       />
 
@@ -3541,6 +3607,7 @@ export default function App() {
     announcements: [],
     settings: { permissions: [], pipeline_templates: [] },
     boards: [],
+    activity: [],
   });
   const [session, setSession] = useState(() => loadSession());
   const [theme, setTheme] = useState(() => loadTheme());
@@ -3580,6 +3647,17 @@ export default function App() {
       setError(loadError.message || "Unable to load workspace");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function refreshWorkspace() {
+    try {
+      const next = await getBootstrap();
+      setData(next);
+      return next;
+    } catch (refreshError) {
+      setError(refreshError.message || "Unable to refresh workspace");
+      return null;
     }
   }
 
@@ -3768,6 +3846,35 @@ export default function App() {
     scrollToWorkspaceSection(".add-task-inline--mobile, .add-task-inline");
   }
 
+  async function handlePlanCopilot(message) {
+    if (!activeBoard || !currentUser) return null;
+    const plan = await planCopilot({
+      message,
+      board_id: activeBoard.id,
+      user_id: currentUser.id,
+    });
+    return plan?.mode ? plan : null;
+  }
+
+  async function handleUndoActivity(activityId = null) {
+    setBusy(activityId ? `undo-${activityId}` : "undo-latest");
+    setError("");
+    try {
+      const result = await undoActivity(activityId);
+      if (result?.workspace) {
+        setData(result.workspace);
+      } else {
+        await refreshWorkspace();
+      }
+      return true;
+    } catch (undoError) {
+      setError(undoError.message || "Unable to undo that change");
+      return false;
+    } finally {
+      setBusy("");
+    }
+  }
+
   function mutateBoard(boardId, updater) {
     setData((current) => ({
       ...current,
@@ -3860,12 +3967,12 @@ export default function App() {
     }
   }
 
-  async function handleCreateGroup(name, color) {
+  async function handleCreateGroup(name, color, mode = "auto") {
     if (!activeBoard) return;
     setBusy("create-group");
     setError("");
     try {
-      const group = await createGroup({ board_id: activeBoard.id, name, color });
+      const group = await createGroup({ board_id: activeBoard.id, name, color, mode });
       mutateBoard(activeBoard.id, (board) => ({ ...board, groups: [...board.groups, group] }));
       return group;
     } catch (submitError) {
@@ -4256,6 +4363,9 @@ export default function App() {
             currentUser={currentUser}
             boards={visibleBoards}
             announcements={data.announcements}
+            activity={data.activity || []}
+            onUndoActivity={handleUndoActivity}
+            busy={busy}
             onOpenBoard={(boardId) => {
               setSelectedBoardId(boardId);
               setPage("project");
@@ -4279,6 +4389,8 @@ export default function App() {
             onUpdateGroup={handleUpdateGroup}
             onCreateField={handleCreateField}
             onUpdateBoard={handleUpdateBoard}
+            onPlanCopilot={handlePlanCopilot}
+            onAfterPlan={refreshWorkspace}
             isMobile={isMobile}
           />
         ) : null}
