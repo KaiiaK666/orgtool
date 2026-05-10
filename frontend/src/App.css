@@ -6678,3 +6678,45 @@ body {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+@media (max-width: 520px) {
+  .login-screen .quick-login-strip {
+    padding: 10px;
+    border-radius: 16px;
+  }
+
+  .login-screen .quick-login-strip__head {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .login-screen .quick-login-strip__head small {
+    display: none;
+  }
+
+  .login-screen .quick-login-strip__list {
+    display: flex;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    gap: 7px;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .login-screen .quick-login-strip__list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .login-screen .quick-login-user {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: max-content;
+    min-height: 34px;
+    padding: 7px 10px;
+    border-radius: 999px;
+  }
+
+  .login-screen .quick-login-user__name {
+    font-size: 0.82rem;
+  }
+}
