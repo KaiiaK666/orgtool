@@ -1966,6 +1966,15 @@ function DashboardView({ currentUser, boards, announcements, activity = [], onUn
   const urgent = myTasks.filter((task) => ["Critical", "High"].includes(task.priority));
   const pinned = announcements.filter((item) => item.pinned);
   const recentActivity = [...activity].reverse().slice(0, 5);
+  const primaryBoard = boards[0] || null;
+  const nextTask = overdue[0] || urgent[0] || dueSoon[0] || myTasks[0] || null;
+  const mobileSummary = overdue.length
+    ? `${overdue.length} overdue`
+    : urgent.length
+      ? `${urgent.length} urgent`
+      : nextTask
+        ? "Next task ready"
+        : "Clean day";
 
   return (
     <div className="dashboard-view">
@@ -1986,6 +1995,29 @@ function DashboardView({ currentUser, boards, announcements, activity = [], onUn
           <span>Projects</span>
           <strong>{boards.length}</strong>
         </article>
+      </section>
+
+      <section className="dashboard-mobile-command" aria-label="Mobile work summary">
+        <div>
+          <span className="eyebrow">Today</span>
+          <strong>{mobileSummary}</strong>
+          <p>
+            {nextTask
+              ? `${nextTask.name} - ${nextTask.board_name}`
+              : primaryBoard
+                ? `${primaryBoard.name} is ready when you are.`
+                : "No boards yet. Create one when you are ready."}
+          </p>
+        </div>
+        {(nextTask || primaryBoard) && (
+          <button
+            type="button"
+            className="ghost-button dashboard-mobile-command__button"
+            onClick={() => onOpenBoard(nextTask?.board_id || primaryBoard.id)}
+          >
+            Open
+          </button>
+        )}
       </section>
 
       <div className="dashboard-grid">
@@ -2569,7 +2601,7 @@ function TaskCopilotPanel({
   }
 
   return (
-    <section className="panel copilot-panel">
+    <section className={cls("panel copilot-panel", isMobile && "copilot-panel--mobile")}>
       <div className="copilot-panel__head">
         <div>
           <span className="eyebrow">AI</span>
@@ -2594,6 +2626,9 @@ function TaskCopilotPanel({
       <p className="copilot-panel__lead">
         Talk naturally. I can turn voice notes into tasks, move dates, mark work done, clean completed items, change priority, add notes, build task groups, and answer what needs attention.
       </p>
+      {isMobile ? (
+        <p className="copilot-panel__mobile-hint">Say one clear thing. I will ask before changing the board.</p>
+      ) : null}
 
       {showExamples ? (
         <div className="copilot-panel__chips">
