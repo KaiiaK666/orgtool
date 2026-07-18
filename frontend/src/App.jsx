@@ -23,6 +23,7 @@ import {
 import {
   buildContextualCopilotPlan,
   buildCopilotConversationContext,
+  isComplexCopilotTurn,
   rememberExecutedOperations,
 } from "./copilotContext.js";
 import { buildDictationPlan, shouldPreferDictationPlan } from "./dictationPlan.js";
@@ -2641,10 +2642,9 @@ function TaskCopilotPanel({
     }
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    const message = draft.trim();
-    if (!message) return;
+  async function submitMessage(rawMessage) {
+    const message = String(rawMessage || "").trim();
+    if (!message || running) return;
     appendMessage("user", message);
     setDraft("");
 
@@ -2664,6 +2664,7 @@ function TaskCopilotPanel({
       pendingPlan,
       recentActions: recentActionsRef.current,
     });
+    const complexTurn = isComplexCopilotTurn(message);
     const contextualPlan = buildContextualCopilotPlan(
       message,
       board,
@@ -2690,9 +2691,19 @@ function TaskCopilotPanel({
       }
     }
     const localPlan = buildAssistantPlan(message, board, currentUser, { users, boards, conversation: conversationContext });
-    const canReplaceAnswerWithFallback = plan?.source !== "ai" && plan?.mode === "answer" && localPlan?.mode === "proposal";
-    if (!plan || canReplaceAnswerWithFallback || shouldPreferDictationPlan(plan, localPlan)) {
-      plan = localPlan;
+    if (complexTurn && plan?.source !== "ai") {
+      plan = {
+        mode: "answer",
+        needsClarification: true,
+        message:
+          "I heard several different changes in that sentence, and I don't want to flatten them into the wrong action. My full planner isn't available right now, so try again in a moment or send the changes one at a time.",
+        operations: [],
+      };
+    } else {
+      const canReplaceAnswerWithFallback = plan?.source !== "ai" && plan?.mode === "answer" && localPlan?.mode === "proposal";
+      if (!plan || canReplaceAnswerWithFallback || shouldPreferDictationPlan(plan, localPlan)) {
+        plan = localPlan;
+      }
     }
     if (plan.mode === "proposal") {
       setPendingPlan(plan);
@@ -2701,6 +2712,11 @@ function TaskCopilotPanel({
     }
 
     reply(plan.message, { kind: plan.needsClarification ? "uncertain" : "" });
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    await submitMessage(draft);
   }
 
   function beginListening() {
@@ -2735,7 +2751,8 @@ function TaskCopilotPanel({
         .join(" ")
         .trim();
       if (!transcript) return;
-      setDraft(transcript);
+      setDraft("");
+      void submitMessage(transcript);
     };
 
     recognitionRef.current = recognition;
@@ -2759,7 +2776,7 @@ function TaskCopilotPanel({
               {voiceReplies ? "Spoken replies on" : "Spoken replies off"}
             </button>
           ) : null}
-          <button type="button" className={cls("ghost-button", listening && "ghost-button--active")} onClick={beginListening}>
+          <button type="button" className={cls("ghost-button", listening && "ghost-button--active")} onClick={beginListening} disabled={running}>
             {listening ? (isMobile ? "Listening..." : "Stop voice input") : isMobile ? "Talk" : "Start voice input"}
           </button>
         </div>

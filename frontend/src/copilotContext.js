@@ -3,6 +3,14 @@ const CONTEXT_REFERENCE_PATTERN =
 
 const REMOVE_PATTERN = /\b(?:delete|remove|clear|erase|trash|scratch|take\s+off|take\s+out|cross\s+off|don'?t\s+add|drop)\b/i;
 const ADD_PATTERN = /\b(?:add|include|put|need|get|grab|buy|pick\s+up)\b/i;
+const DATE_OR_MOVE_PATTERN =
+  /\b(?:move|push|reschedule|due|today|tomorrow|tonight|this\s+week|next\s+week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i;
+const MOVE_OR_RESCHEDULE_PATTERN = /\b(?:move|push|reschedule|change\s+(?:the\s+)?date|make\s+(?:it|that)\s+due)\b/i;
+const ASSIGN_OR_RENAME_PATTERN = /\b(?:assign|owner|give\s+to|rename|call\s+it|change\s+the\s+name)\b/i;
+const EXPLICIT_COMPLETION_PATTERN =
+  /\b(?:finished|completed|handled|wrapped\s+up|knocked\s+out|checked\s+off|crossed\s+off|done\s+with|got|bought|grabbed|purchased)\b|\b(?:mark|make|set)\b.+\b(?:done|complete|completed)\b/i;
+const DIFFERENTIAL_REFERENCE_PATTERN =
+  /\b(?:but|except|instead|first|second|third|former|latter|other\s+one|one\s+of\s+them)\b/i;
 
 function normalize(value = "") {
   return String(value)
@@ -82,6 +90,29 @@ function priorityFromMessage(message = "") {
   if (/\b(?:medium|normal|regular)\b/i.test(message)) return "Medium";
   if (/\b(?:low|not\s+urgent|whenever|back\s+burner)\b/i.test(message)) return "Low";
   return null;
+}
+
+function shouldDeferComplexContextTurn(message = "") {
+  const hasAdd = ADD_PATTERN.test(message);
+  const actionFamilies = [
+    REMOVE_PATTERN.test(message),
+    hasAdd,
+    EXPLICIT_COMPLETION_PATTERN.test(message),
+    MOVE_OR_RESCHEDULE_PATTERN.test(message),
+    ASSIGN_OR_RENAME_PATTERN.test(message),
+  ].filter(Boolean).length;
+  if (actionFamilies > 1) return true;
+  const modifierFamilies = [
+    Boolean(statusFromMessage(message)),
+    Boolean(priorityFromMessage(message)),
+    DATE_OR_MOVE_PATTERN.test(message),
+  ].filter(Boolean).length;
+  if (!hasAdd && modifierFamilies > 1) return true;
+  return DIFFERENTIAL_REFERENCE_PATTERN.test(message) && /\b(?:and|but|except|while)\b/i.test(message);
+}
+
+export function isComplexCopilotTurn(message = "") {
+  return shouldDeferComplexContextTurn(message);
 }
 
 function operationTaskRefs(operation = {}) {
@@ -251,6 +282,9 @@ function revisePendingPlan(message, pendingPlan, currentUser) {
 }
 
 export function buildContextualCopilotPlan(message, board, currentUser, recentActions = [], pendingPlan = null) {
+  if ((pendingPlan?.operations?.length || recentActions.length) && shouldDeferComplexContextTurn(message)) {
+    return null;
+  }
   const pendingRevision = revisePendingPlan(message, pendingPlan, currentUser);
   if (pendingRevision) return pendingRevision;
 
@@ -362,7 +396,7 @@ function compactOperation(operation = {}) {
 export function buildCopilotConversationContext({ history = [], pendingPlan = null, recentActions = [] } = {}) {
   return {
     messages: history
-      .slice(-12)
+      .slice(-16)
       .filter((entry) => entry?.text && ["user", "assistant"].includes(entry.role))
       .map((entry) => ({ role: entry.role, content: String(entry.text).slice(0, 1600) })),
     pending_plan: pendingPlan?.operations?.length
@@ -371,7 +405,7 @@ export function buildCopilotConversationContext({ history = [], pendingPlan = nu
           operations: pendingPlan.operations.slice(0, 40).map(compactOperation),
         }
       : null,
-    recent_actions: recentActions.slice(-6).map((action) => ({
+    recent_actions: recentActions.slice(-8).map((action) => ({
       completed_at: action.completedAt || null,
       operations: (action.operations || []).slice(0, 40).map(compactOperation),
     })),
@@ -386,5 +420,5 @@ export function rememberExecutedOperations(recentActions = [], operations = []) 
       completedAt: new Date().toISOString(),
       operations: operations.map(compactOperation),
     },
-  ].slice(-6);
+  ].slice(-8);
 }

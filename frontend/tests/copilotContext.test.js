@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildContextualCopilotPlan,
   buildCopilotConversationContext,
+  isComplexCopilotTurn,
   rememberExecutedOperations,
 } from "../src/copilotContext.js";
 
@@ -75,6 +76,37 @@ test("handles multiple recently created items named directly without requiring p
   );
 });
 
+test("defers mixed completion and addition to the AI planner", () => {
+  const plan = buildContextualCopilotPlan("mark milk done but also add bananas", board, user, executedCreate);
+  assert.equal(plan, null);
+});
+
+test("defers mixed pending-plan edits instead of flattening them into one action", () => {
+  const pendingPlan = {
+    mode: "proposal",
+    operations: [
+      { type: "create-task", name: "Milk", groupName: "Shopping List" },
+      { type: "create-task", name: "Eggs", groupName: "Shopping List" },
+    ],
+  };
+  const plan = buildContextualCopilotPlan("remove eggs but make milk urgent", board, user, [], pendingPlan);
+  assert.equal(plan, null);
+});
+
+test("defers different instructions for the first and second referenced tasks", () => {
+  const plan = buildContextualCopilotPlan("make the first one urgent and the second one low priority", board, user, executedCreate);
+  assert.equal(plan, null);
+});
+
+test("identifies a complex first-turn request before any local fallback can flatten it", () => {
+  assert.equal(
+    isComplexCopilotTurn("I finished CSI, move the videos to Friday, and add send the update"),
+    true
+  );
+  assert.equal(isComplexCopilotTurn("make those urgent"), false);
+  assert.equal(isComplexCopilotTurn("I need to finish the month end report tomorrow"), false);
+});
+
 test("revises a pending creation instead of deleting nonexistent tasks", () => {
   const pendingPlan = {
     mode: "proposal",
@@ -113,16 +145,16 @@ test("keeps unfinished dictation warnings while revising a pending plan", () => 
 test("sends bounded conversation and action context to the planner", () => {
   const history = Array.from({ length: 20 }, (_, index) => ({ role: index % 2 ? "assistant" : "user", text: `message ${index}` }));
   const context = buildCopilotConversationContext({ history, recentActions: executedCreate });
-  assert.equal(context.messages.length, 12);
-  assert.equal(context.messages[0].content, "message 8");
+  assert.equal(context.messages.length, 16);
+  assert.equal(context.messages[0].content, "message 4");
   assert.equal(context.recent_actions[0].operations[1].taskId, 101);
 });
 
-test("keeps only the six most recent completed action batches", () => {
+test("keeps only the eight most recent completed action batches", () => {
   let actions = [];
-  for (let index = 0; index < 8; index += 1) {
+  for (let index = 0; index < 10; index += 1) {
     actions = rememberExecutedOperations(actions, [{ type: "create-task", name: `Task ${index}`, taskId: index + 1 }]);
   }
-  assert.equal(actions.length, 6);
+  assert.equal(actions.length, 8);
   assert.equal(actions[0].operations[0].name, "Task 2");
 });
