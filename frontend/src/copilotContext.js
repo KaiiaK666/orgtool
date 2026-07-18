@@ -19,6 +19,50 @@ function normalize(value = "") {
     .trim();
 }
 
+const APPROVAL_ONLY_MESSAGES = new Set([
+  "yes",
+  "yes please",
+  "yes do it",
+  "yes that is right",
+  "yep",
+  "yeah",
+  "sure",
+  "confirm",
+  "confirmed",
+  "do it",
+  "please do",
+  "go ahead",
+  "approved",
+  "approve",
+  "looks good",
+  "that is right",
+  "correct",
+  "exactly",
+]);
+
+const CANCEL_ONLY_MESSAGES = new Set([
+  "no",
+  "nope",
+  "no thanks",
+  "no thank you",
+  "cancel",
+  "cancel it",
+  "no cancel it",
+  "stop",
+  "never mind",
+  "nevermind",
+  "do not do it",
+  "don t do it",
+]);
+
+export function isApprovalOnlyMessage(message = "") {
+  return APPROVAL_ONLY_MESSAGES.has(normalize(message));
+}
+
+export function isCancelOnlyMessage(message = "") {
+  return CANCEL_ONLY_MESSAGES.has(normalize(message));
+}
+
 function sentenceCase(value = "") {
   const text = String(value || "").trim();
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";

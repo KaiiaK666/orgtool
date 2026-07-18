@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import {
   buildContextualCopilotPlan,
   buildCopilotConversationContext,
+  isApprovalOnlyMessage,
+  isCancelOnlyMessage,
   isComplexCopilotTurn,
   rememberExecutedOperations,
 } from "../src/copilotContext.js";
@@ -31,6 +33,33 @@ const executedCreate = [
     ],
   },
 ];
+
+test("executes only standalone approval messages", () => {
+  for (const message of ["yes", "Yes, please!", "do it", "go ahead", "looks good", "correct"]) {
+    assert.equal(isApprovalOnlyMessage(message), true, message);
+  }
+  for (const message of [
+    "yes, but move it to Friday",
+    "yes and add milk",
+    "go ahead after you remove eggs",
+    "approved except for the date",
+  ]) {
+    assert.equal(isApprovalOnlyMessage(message), false, message);
+  }
+});
+
+test("cancels only standalone cancellation messages", () => {
+  for (const message of ["no", "No, thanks", "cancel it", "never mind", "don't do it"]) {
+    assert.equal(isCancelOnlyMessage(message), true, message);
+  }
+  for (const message of [
+    "no, change it to Friday",
+    "cancel eggs but keep milk",
+    "don't do that one, add this instead",
+  ]) {
+    assert.equal(isCancelOnlyMessage(message), false, message);
+  }
+});
 
 test("removes the exact items created in the previous turn", () => {
   const plan = buildContextualCopilotPlan("remove those items", board, user, executedCreate);

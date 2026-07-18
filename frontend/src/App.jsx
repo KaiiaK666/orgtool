@@ -23,6 +23,8 @@ import {
 import {
   buildContextualCopilotPlan,
   buildCopilotConversationContext,
+  isApprovalOnlyMessage,
+  isCancelOnlyMessage,
   isComplexCopilotTurn,
   rememberExecutedOperations,
 } from "./copilotContext.js";
@@ -2429,8 +2431,8 @@ function TaskCopilotPanel({
         "Create a Natasha group with call list, flyers, and schedule",
         "What should I handle first?",
       ];
-  const visibleHistory = isMobile ? history.slice(-2) : history;
-  const showThread = !isMobile || (!pendingPlan && history.length > 1);
+  const visibleHistory = isMobile ? history.slice(-4) : history;
+  const showThread = history.length > 1;
 
   useEffect(() => {
     setHistory([
@@ -2648,13 +2650,13 @@ function TaskCopilotPanel({
     appendMessage("user", message);
     setDraft("");
 
-    if (pendingPlan && /^(yes|yep|yeah|confirm|do it|go ahead|please do|approved|sure)\b/i.test(message)) {
+    if (pendingPlan && isApprovalOnlyMessage(message)) {
       reply("Working on it.");
       executePlan(pendingPlan);
       return;
     }
 
-    if (pendingPlan && /^(no|nope|cancel|stop|don'?t|never mind)\b/i.test(message)) {
+    if (pendingPlan && isCancelOnlyMessage(message)) {
       handleCancelPlan();
       return;
     }
@@ -2817,7 +2819,7 @@ function TaskCopilotPanel({
               <span className="copilot-confirm__eyebrow">Ready for review</span>
               <strong>{pendingPlan.operations.length} proposed change{pendingPlan.operations.length === 1 ? "" : "s"}</strong>
             </div>
-            <small>Nothing changes until you confirm</small>
+            <small>Say yes to apply, or keep talking to change this draft</small>
           </div>
           {pendingPlan.warnings?.length ? (
             <p className="copilot-confirm__warning">{pendingPlan.warnings[0]}</p>
