@@ -17,6 +17,20 @@ const ROUTING_ONLY_PATTERN =
 const VAGUE_TASK_PATTERN =
   /^(?:do|finish|complete|update|handle|work\s+on)(?:\s+(?:(?:the|a|an)\s+)?(?:it|that|this|update|updated|thing|stuff|task|item|items))?$/i;
 
+const UNRESOLVED_REFERENCE_PATTERN =
+  /^(?:that|this|it|them|those|these|him|her|someone|somebody|something|anything|the\s+(?:thing|stuff|task|item)|another\s+task)$/i;
+
+const UNRESOLVED_OBJECT_PATTERN =
+  /^(?:call|email|text|contact|meet|message|ask|tell|send(?:\s+(?:it|that|this))?\s+to)\s+(?:him|her|them|it|that|this|someone|somebody)\b/i;
+
+const AMBIGUOUS_CHOICE_PATTERN = new RegExp(
+  `^(?:${ACTION_VERBS})\\b.{0,60}\\s+or\\s+(?:${ACTION_VERBS})\\b`,
+  "i"
+);
+
+const META_TASK_PATTERN =
+  /\b(?:add|create|make|write|put)\s+(?:(?:me|us)\s+)?(?:(?:another|a|an|new)\s+)?tasks?\b/i;
+
 function sentenceCase(value = "") {
   const text = String(value || "").trim();
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
@@ -100,7 +114,18 @@ function cleanTaskText(value = "") {
       .replace(/\s+/g, " ")
       .trim()
   );
-  if (!text || text.length > 120 || ROUTING_ONLY_PATTERN.test(text) || VAGUE_TASK_PATTERN.test(text)) return "";
+  if (
+    !text ||
+    text.length > 120 ||
+    ROUTING_ONLY_PATTERN.test(text) ||
+    VAGUE_TASK_PATTERN.test(text) ||
+    UNRESOLVED_REFERENCE_PATTERN.test(text) ||
+    UNRESOLVED_OBJECT_PATTERN.test(text) ||
+    AMBIGUOUS_CHOICE_PATTERN.test(text) ||
+    META_TASK_PATTERN.test(text)
+  ) {
+    return "";
+  }
   if (/\b(?:tasks?|board|list)\s*$/i.test(text) && /^(?:add|put|save|write)\b/i.test(text)) return "";
   return text;
 }
@@ -181,7 +206,17 @@ export function buildDictationPlan(message, board, currentUser, { now = new Date
     });
   }
 
-  if (!operations.length) return null;
+  if (!operations.length) {
+    if (!skipped.length) return null;
+    return {
+      mode: "answer",
+      operations: [],
+      captureSource: "dictation",
+      needsClarification: true,
+      skippedFragments: skipped,
+      message: `I'm not sure what you mean by "${skipped[0]}", and I don't want to create the wrong task. Tell me the specific action or person and I'll add it.`,
+    };
+  }
   const skippedNote = skipped.length
     ? ` I left out “${skipped[0]}” because it sounds unfinished.`
     : "";
@@ -198,6 +233,7 @@ function suspiciousCreateTask(operation = {}) {
   if (operation.type !== "create-task") return false;
   const name = String(operation.name || "");
   return (
+    !cleanTaskText(name) ||
     name.length > 100 ||
     /\b(?:in the tasks?|on the board)\b/i.test(name) ||
     (name.match(/\b(?:i|we)\s+(?:also\s+)?(?:need|have|got|want)\s+to\b/gi) || []).length > 0
@@ -205,8 +241,13 @@ function suspiciousCreateTask(operation = {}) {
 }
 
 export function shouldPreferDictationPlan(remotePlan, localPlan) {
-  if (localPlan?.captureSource !== "dictation" || !localPlan.operations?.length) return false;
-  if (remotePlan?.source === "ai" && remotePlan.mode === "answer") return false;
+  if (localPlan?.captureSource !== "dictation") return false;
+  if (remotePlan?.source === "ai") return false;
+  if (localPlan.mode === "answer" && localPlan.needsClarification) {
+    if (!remotePlan) return true;
+    return remotePlan.mode === "proposal" && (remotePlan.operations || []).some(suspiciousCreateTask);
+  }
+  if (!localPlan.operations?.length) return false;
   if (!remotePlan || remotePlan.mode !== "proposal") return true;
   const remoteOperations = remotePlan.operations || [];
   if (remoteOperations.some(suspiciousCreateTask)) return true;

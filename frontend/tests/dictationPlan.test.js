@@ -35,6 +35,35 @@ test("turns the reported messy voice note into separate dated tasks", () => {
   assert.deepEqual(plan.skippedFragments, ["Do the updated"]);
 });
 
+test("rejects the garbage fragments shown in the live review screen", () => {
+  const plan = buildDictationPlan(
+    "I need to that today and then finish the CSI automation videos and then send or create another task for sending the update",
+    board,
+    user,
+    { now: friday }
+  );
+
+  assert.deepEqual(plan.operations.map((operation) => operation.name), ["Finish the CSI automation videos"]);
+  assert.deepEqual(plan.skippedFragments, [
+    "That today",
+    "Send or create another task for sending the update",
+  ]);
+});
+
+test("asks for clarification instead of creating a task with an unresolved target", () => {
+  const local = buildDictationPlan("I need to call them today", board, user, { now: friday });
+  const remote = {
+    mode: "proposal",
+    source: "rules",
+    operations: [{ type: "create-task", name: "Call them" }],
+  };
+
+  assert.equal(local.mode, "answer");
+  assert.equal(local.needsClarification, true);
+  assert.match(local.message, /not sure/i);
+  assert.equal(shouldPreferDictationPlan(remote, local), true);
+});
+
 test("splits connected actions even when the obligation is only said once", () => {
   const plan = buildDictationPlan(
     "I need to call Miguel today and then send the recap tomorrow and also review the CSI report next week",
