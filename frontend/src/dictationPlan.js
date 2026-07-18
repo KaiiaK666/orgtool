@@ -64,7 +64,7 @@ function endOfWorkWeek(now, nextWeek = false) {
   return isoDate(addDays(now, delta));
 }
 
-function parseDateLabel(label = "", now = new Date()) {
+export function parseDateLabel(label = "", now = new Date()) {
   const text = String(label || "").trim().toLowerCase();
   if (!text) return null;
   if (text === "today" || text === "tonight") return isoDate(now);

@@ -1,3 +1,5 @@
+import { parseDateLabel } from "./dictationPlan.js";
+
 const CONTEXT_REFERENCE_PATTERN =
   /\b(?:it|that|this|those|these|them|they|same|ones?|that\s+list|this\s+list|the\s+list|those\s+items?|these\s+items?|those\s+tasks?|these\s+tasks?|items?\s+you\s+just\s+(?:added|created)|tasks?\s+you\s+just\s+(?:added|created)|just\s+(?:added|created))\b/i;
 
@@ -11,6 +13,8 @@ const EXPLICIT_COMPLETION_PATTERN =
   /\b(?:finished|completed|handled|wrapped\s+up|knocked\s+out|checked\s+off|crossed\s+off|done\s+with|got|bought|grabbed|purchased)\b|\b(?:mark|make|set)\b.+\b(?:done|complete|completed)\b/i;
 const DIFFERENTIAL_REFERENCE_PATTERN =
   /\b(?:but|except|instead|first|second|third|former|latter|other\s+one|one\s+of\s+them)\b/i;
+const NATURAL_DATE_PATTERN =
+  /\b(today|tomorrow|tonight|this\s+week|next\s+week|(?:this|next)\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\b/i;
 
 function normalize(value = "") {
   return String(value)
@@ -61,6 +65,23 @@ export function isApprovalOnlyMessage(message = "") {
 
 export function isCancelOnlyMessage(message = "") {
   return CANCEL_ONLY_MESSAGES.has(normalize(message));
+}
+
+export function buildClarificationFollowUp(previousRequest = "", answer = "") {
+  const request = String(previousRequest || "").trim();
+  const clarification = String(answer || "").trim();
+  if (!request) return clarification;
+  if (!clarification) return request;
+  return `${request}\nClarification answer: ${clarification}`;
+}
+
+function stripPendingConversationPrefix(message = "") {
+  return String(message || "")
+    .trim()
+    .replace(/^(?:yes|yep|yeah|sure|okay|ok|approved|go\s+ahead)\s*[,;:-]?\s*(?:but|and)\s+/i, "")
+    .replace(/^(?:no|nope)\s*[,;:-]?\s+(?=(?:change|move|make|add|remove|keep|rename|push|reschedule)\b)/i, "")
+    .replace(/^(?:actually|sorry|i\s+mean)\s*[,;:-]?\s*/i, "")
+    .trim();
 }
 
 function sentenceCase(value = "") {
@@ -224,14 +245,16 @@ function selectMentionedTasks(message, tasks = []) {
 }
 
 function selectPendingTaskOperations(message, operations = []) {
-  const creates = operations.filter((operation) => operation.type === "create-task");
+  const taskOperations = operations.filter((operation) =>
+    ["create-task", "update-task", "delete-task"].includes(operation.type)
+  );
   const normalizedMessage = normalize(message);
-  const explicit = creates.filter((operation) => {
-    const name = normalize(operation.name);
+  const explicit = taskOperations.filter((operation) => {
+    const name = normalize(operation.name || operation.taskName);
     return name && normalizedMessage.includes(name);
   });
   if (explicit.length) return explicit;
-  return CONTEXT_REFERENCE_PATTERN.test(message) ? creates : [];
+  return CONTEXT_REFERENCE_PATTERN.test(message) ? taskOperations : [];
 }
 
 function pendingTargetGroup(pendingPlan = null) {
@@ -270,8 +293,9 @@ function revisePendingPlan(message, pendingPlan, currentUser) {
   }
 
   const status = statusFromMessage(message);
-  if (status && selected.length) {
-    const selectedSet = new Set(selected);
+  const statusTargets = selected.filter((operation) => ["create-task", "update-task"].includes(operation.type));
+  if (status && statusTargets.length) {
+    const selectedSet = new Set(statusTargets);
     const revised = operations.map((operation) =>
       selectedSet.has(operation) ? { ...operation, status, changes: { ...(operation.changes || {}), status } } : operation
     );
@@ -282,17 +306,43 @@ function revisePendingPlan(message, pendingPlan, currentUser) {
   }
 
   const priority = priorityFromMessage(message);
-  if (priority && selected.length) {
-    const selectedSet = new Set(selected);
-    const revised = operations.map((operation) => (selectedSet.has(operation) ? { ...operation, priority } : operation));
+  const priorityTargets = selected.filter((operation) => ["create-task", "update-task"].includes(operation.type));
+  if (priority && priorityTargets.length) {
+    const selectedSet = new Set(priorityTargets);
+    const revised = operations.map((operation) => {
+      if (!selectedSet.has(operation)) return operation;
+      if (operation.type === "update-task") {
+        return { ...operation, changes: { ...(operation.changes || {}), priority } };
+      }
+      return { ...operation, priority };
+    });
     return {
       ...preservePendingMetadata(proposal(revised, `Okay, I changed the pending items to ${priority} priority.`), pendingPlan),
       contextAction: "replace-pending",
     };
   }
 
+  const dateLabel = message.match(NATURAL_DATE_PATTERN)?.[1] || "";
+  const dueDate = parseDateLabel(dateLabel);
+  const dateTargets = selected.filter((operation) => ["create-task", "update-task"].includes(operation.type));
+  if (dueDate && dateTargets.length) {
+    const selectedSet = new Set(dateTargets);
+    const revised = operations.map((operation) => {
+      if (!selectedSet.has(operation)) return operation;
+      if (operation.type === "create-task") return { ...operation, dueDate };
+      if (operation.type === "update-task") {
+        return { ...operation, changes: { ...(operation.changes || {}), due_date: dueDate } };
+      }
+      return operation;
+    });
+    return {
+      ...preservePendingMetadata(proposal(revised, `Okay, I changed the pending due date to ${dateLabel}.`), pendingPlan),
+      contextAction: "replace-pending",
+    };
+  }
+
   const targetGroup = pendingTargetGroup(pendingPlan);
-  if (targetGroup && ADD_PATTERN.test(message) && /\b(?:also|that|this|same|it)\b/i.test(message)) {
+  if (targetGroup && ADD_PATTERN.test(message) && !/\b(?:new|separate|unrelated)\s+(?:request|thing|task)\b/i.test(message)) {
     const items = splitItems(message);
     const existing = new Set(
       operations.filter((operation) => operation.type === "create-task").map((operation) => normalize(operation.name))
@@ -326,10 +376,11 @@ function revisePendingPlan(message, pendingPlan, currentUser) {
 }
 
 export function buildContextualCopilotPlan(message, board, currentUser, recentActions = [], pendingPlan = null) {
-  if ((pendingPlan?.operations?.length || recentActions.length) && shouldDeferComplexContextTurn(message)) {
+  const contextualMessage = pendingPlan ? stripPendingConversationPrefix(message) : message;
+  if ((pendingPlan?.operations?.length || recentActions.length) && shouldDeferComplexContextTurn(contextualMessage)) {
     return null;
   }
-  const pendingRevision = revisePendingPlan(message, pendingPlan, currentUser);
+  const pendingRevision = revisePendingPlan(contextualMessage, pendingPlan, currentUser);
   if (pendingRevision) return pendingRevision;
 
   const recentTasks = recentTaskMatches(board, recentActions);

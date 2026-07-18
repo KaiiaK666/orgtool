@@ -23,6 +23,7 @@ import {
 import {
   buildContextualCopilotPlan,
   buildCopilotConversationContext,
+  buildClarificationFollowUp,
   isApprovalOnlyMessage,
   isCancelOnlyMessage,
   isComplexCopilotTurn,
@@ -2417,6 +2418,7 @@ function TaskCopilotPanel({
   const [showExamples, setShowExamples] = useState(false);
   const recognitionRef = useRef(null);
   const recentActionsRef = useRef([]);
+  const clarificationRef = useRef(null);
   const samplePrompts = isMobile
     ? [
         "I need milk eggs bread",
@@ -2445,6 +2447,7 @@ function TaskCopilotPanel({
     setDraft("");
     setShowExamples(false);
     recentActionsRef.current = [];
+    clarificationRef.current = null;
   }, [board?.id]);
 
   useEffect(() => {
@@ -2476,6 +2479,7 @@ function TaskCopilotPanel({
 
   function handleCancelPlan() {
     setPendingPlan(null);
+    clarificationRef.current = null;
     reply("Okay, I canceled that request. Tell me the next change you want me to line up.");
   }
 
@@ -2634,6 +2638,7 @@ function TaskCopilotPanel({
       }
 
       recentActionsRef.current = rememberExecutedOperations(recentActionsRef.current, executedOperations);
+      clarificationRef.current = null;
       setPendingPlan(null);
       reply(results.length ? spokenJoin(results) : "Done. I made the requested changes.");
       onAfterPlan?.();
@@ -2650,25 +2655,31 @@ function TaskCopilotPanel({
     appendMessage("user", message);
     setDraft("");
 
-    if (pendingPlan && isApprovalOnlyMessage(message)) {
+    const activeClarification = clarificationRef.current;
+
+    if (pendingPlan && !activeClarification && isApprovalOnlyMessage(message)) {
       reply("Working on it.");
       executePlan(pendingPlan);
       return;
     }
 
-    if (pendingPlan && isCancelOnlyMessage(message)) {
+    if (pendingPlan && !activeClarification && isCancelOnlyMessage(message)) {
       handleCancelPlan();
       return;
     }
+
+    const plannerMessage = activeClarification
+      ? buildClarificationFollowUp(activeClarification.request, message)
+      : message;
 
     const conversationContext = buildCopilotConversationContext({
       history: [...history, { role: "user", text: message }],
       pendingPlan,
       recentActions: recentActionsRef.current,
     });
-    const complexTurn = isComplexCopilotTurn(message);
+    const complexTurn = isComplexCopilotTurn(plannerMessage);
     const contextualPlan = buildContextualCopilotPlan(
-      message,
+      plannerMessage,
       board,
       currentUser,
       recentActionsRef.current,
@@ -2676,6 +2687,7 @@ function TaskCopilotPanel({
     );
 
     if (contextualPlan?.contextAction === "replace-pending") {
+      clarificationRef.current = null;
       setPendingPlan(contextualPlan.mode === "proposal" ? contextualPlan : null);
       reply(contextualPlan.message);
       return;
@@ -2685,14 +2697,14 @@ function TaskCopilotPanel({
     if (!plan) {
       setRunning(true);
       try {
-        plan = await onPlanCopilot?.(message, conversationContext);
+        plan = await onPlanCopilot?.(plannerMessage, conversationContext);
       } catch {
         plan = null;
       } finally {
         setRunning(false);
       }
     }
-    const localPlan = buildAssistantPlan(message, board, currentUser, { users, boards, conversation: conversationContext });
+    const localPlan = buildAssistantPlan(plannerMessage, board, currentUser, { users, boards, conversation: conversationContext });
     if (complexTurn && plan?.source !== "ai") {
       plan = {
         mode: "answer",
@@ -2708,11 +2720,15 @@ function TaskCopilotPanel({
       }
     }
     if (plan.mode === "proposal") {
+      clarificationRef.current = null;
       setPendingPlan(plan);
       reply(plan.message);
       return;
     }
 
+    clarificationRef.current = plan.needsClarification
+      ? { request: plannerMessage, question: plan.message }
+      : null;
     reply(plan.message, { kind: plan.needsClarification ? "uncertain" : "" });
   }
 

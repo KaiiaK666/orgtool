@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildContextualCopilotPlan,
   buildCopilotConversationContext,
+  buildClarificationFollowUp,
   isApprovalOnlyMessage,
   isCancelOnlyMessage,
   isComplexCopilotTurn,
@@ -59,6 +60,33 @@ test("cancels only standalone cancellation messages", () => {
   ]) {
     assert.equal(isCancelOnlyMessage(message), false, message);
   }
+});
+
+test("combines a short clarification answer with the original request", () => {
+  assert.equal(
+    buildClarificationFollowUp("move that to Friday", "the CSI automation videos"),
+    "move that to Friday\nClarification answer: the CSI automation videos"
+  );
+});
+
+test("revises a pending draft when an approval phrase contains more instructions", () => {
+  const pendingPlan = {
+    mode: "proposal",
+    operations: [
+      { type: "create-task", name: "Milk", groupName: "Shopping List", dueDate: null },
+      { type: "create-task", name: "Eggs", groupName: "Shopping List", dueDate: null },
+    ],
+  };
+  const dated = buildContextualCopilotPlan("yes, but move eggs to 2026-07-24", board, user, [], pendingPlan);
+  assert.equal(dated.contextAction, "replace-pending");
+  assert.equal(dated.operations[0].dueDate, null);
+  assert.equal(dated.operations[1].dueDate, "2026-07-24");
+
+  const expanded = buildContextualCopilotPlan("yes and add coffee", board, user, [], dated);
+  assert.deepEqual(
+    expanded.operations.filter((operation) => operation.type === "create-task").map((operation) => operation.name),
+    ["Milk", "Eggs", "Coffee"]
+  );
 });
 
 test("removes the exact items created in the previous turn", () => {
