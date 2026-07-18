@@ -6402,6 +6402,54 @@ body {
   display: none;
 }
 
+.copilot-voice-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--accent-soft) 74%, var(--surface));
+}
+
+.copilot-voice-status__pulse {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--muted);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--muted) 14%, transparent);
+}
+
+.copilot-voice-status--listening .copilot-voice-status__pulse {
+  background: #ef4444;
+  box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.14);
+  animation: copilot-listening-pulse 1.4s ease-in-out infinite;
+}
+
+.copilot-voice-status div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.copilot-voice-status strong {
+  font-size: 0.86rem;
+}
+
+.copilot-voice-status small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+@keyframes copilot-listening-pulse {
+  50% {
+    transform: scale(0.78);
+    opacity: 0.62;
+  }
+}
+
 @media (max-width: 900px) {
   .workspace-shell--mobile .main-panel {
     padding: 10px 9px 86px;

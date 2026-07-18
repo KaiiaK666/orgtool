@@ -2414,11 +2414,23 @@ function TaskCopilotPanel({
   const [pendingPlan, setPendingPlan] = useState(null);
   const [voiceReplies, setVoiceReplies] = useState(true);
   const [listening, setListening] = useState(false);
+  const [voiceSessionActive, setVoiceSessionActive] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState("");
   const [running, setRunning] = useState(false);
   const [showExamples, setShowExamples] = useState(false);
   const recognitionRef = useRef(null);
+  const submitMessageRef = useRef(null);
   const recentActionsRef = useRef([]);
   const clarificationRef = useRef(null);
+  const voiceSessionRef = useRef(false);
+  const voiceTurnInFlightRef = useRef(false);
+  const voiceTranscriptRef = useRef("");
+  const voiceInterimRef = useRef("");
+  const voiceSubmitTimerRef = useRef(null);
+  const voiceRestartTimerRef = useRef(null);
+  const runningRef = useRef(false);
+  const wakeLockRef = useRef(null);
+  const speechGenerationRef = useRef(0);
   const samplePrompts = isMobile
     ? [
         "I need milk eggs bread",
@@ -2448,11 +2460,24 @@ function TaskCopilotPanel({
     setShowExamples(false);
     recentActionsRef.current = [];
     clarificationRef.current = null;
+    stopVoiceSession();
   }, [board?.id]);
 
   useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState !== "visible" || !voiceSessionRef.current) return;
+      void requestVoiceWakeLock();
+      scheduleVoiceRestart(250);
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
-      recognitionRef.current?.stop?.();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      voiceSessionRef.current = false;
+      clearTimeout(voiceSubmitTimerRef.current);
+      clearTimeout(voiceRestartTimerRef.current);
+      recognitionRef.current?.abort?.();
+      wakeLockRef.current?.release?.().catch?.(() => {});
       if (typeof window !== "undefined" && window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
@@ -2463,12 +2488,80 @@ function TaskCopilotPanel({
     setHistory((current) => [...current, { role, text, kind }]);
   }
 
+  function setCopilotRunning(nextRunning) {
+    runningRef.current = nextRunning;
+    setRunning(nextRunning);
+  }
+
+  async function requestVoiceWakeLock() {
+    if (
+      !voiceSessionRef.current ||
+      typeof navigator === "undefined" ||
+      !navigator.wakeLock?.request ||
+      document.visibilityState !== "visible" ||
+      wakeLockRef.current
+    ) {
+      return;
+    }
+    try {
+      const lock = await navigator.wakeLock.request("screen");
+      wakeLockRef.current = lock;
+      lock.addEventListener?.("release", () => {
+        if (wakeLockRef.current === lock) wakeLockRef.current = null;
+      });
+    } catch {
+      wakeLockRef.current = null;
+    }
+  }
+
+  function releaseVoiceWakeLock() {
+    const lock = wakeLockRef.current;
+    wakeLockRef.current = null;
+    lock?.release?.().catch?.(() => {});
+  }
+
+  function scheduleVoiceRestart(delay = 350) {
+    clearTimeout(voiceRestartTimerRef.current);
+    if (
+      !voiceSessionRef.current ||
+      voiceTurnInFlightRef.current ||
+      runningRef.current ||
+      (typeof document !== "undefined" && document.visibilityState !== "visible")
+    ) {
+      return;
+    }
+    voiceRestartTimerRef.current = setTimeout(() => startVoiceRecognition(), delay);
+  }
+
+  function finishVoiceReply(generation) {
+    setTimeout(() => {
+      if (generation !== speechGenerationRef.current || !voiceSessionRef.current) return;
+      if (runningRef.current) {
+        setVoiceStatus("Working on that...");
+        return;
+      }
+      voiceTurnInFlightRef.current = false;
+      setVoiceStatus("Listening for your reply...");
+      scheduleVoiceRestart(250);
+    }, 150);
+  }
+
   function speak(text) {
-    if (!voiceReplies || typeof window === "undefined" || !window.speechSynthesis) return;
+    const generation = speechGenerationRef.current + 1;
+    speechGenerationRef.current = generation;
+    if (!voiceReplies || typeof window === "undefined" || !window.speechSynthesis) {
+      finishVoiceReply(generation);
+      return;
+    }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(String(text || "").replace(/\s+/g, " ").trim());
     utterance.rate = 1;
     utterance.pitch = 1;
+    utterance.onstart = () => {
+      if (voiceSessionRef.current) setVoiceStatus("Copilot is talking...");
+    };
+    utterance.onend = () => finishVoiceReply(generation);
+    utterance.onerror = () => finishVoiceReply(generation);
     window.speechSynthesis.speak(utterance);
   }
 
@@ -2485,7 +2578,7 @@ function TaskCopilotPanel({
 
   async function executePlan(plan) {
     if (!plan?.operations?.length) return;
-    setRunning(true);
+    setCopilotRunning(true);
     try {
       let activeGroup = null;
       const createdGroups = new Map();
@@ -2645,13 +2738,13 @@ function TaskCopilotPanel({
     } catch (error) {
       reply(error?.message || "I could not finish that change.");
     } finally {
-      setRunning(false);
+      setCopilotRunning(false);
     }
   }
 
   async function submitMessage(rawMessage) {
     const message = String(rawMessage || "").trim();
-    if (!message || running) return;
+    if (!message || runningRef.current) return;
     appendMessage("user", message);
     setDraft("");
 
@@ -2695,13 +2788,13 @@ function TaskCopilotPanel({
 
     let plan = contextualPlan;
     if (!plan) {
-      setRunning(true);
+      setCopilotRunning(true);
       try {
         plan = await onPlanCopilot?.(plannerMessage, conversationContext);
       } catch {
         plan = null;
       } finally {
-        setRunning(false);
+        setCopilotRunning(false);
       }
     }
     const localPlan = buildAssistantPlan(plannerMessage, board, currentUser, { users, boards, conversation: conversationContext });
@@ -2732,49 +2825,147 @@ function TaskCopilotPanel({
     reply(plan.message, { kind: plan.needsClarification ? "uncertain" : "" });
   }
 
+  submitMessageRef.current = submitMessage;
+
   async function handleSubmit(event) {
     event.preventDefault();
+    if (voiceSessionRef.current) {
+      clearTimeout(voiceSubmitTimerRef.current);
+      voiceTurnInFlightRef.current = true;
+      setVoiceStatus("Thinking...");
+      recognitionRef.current?.stop?.();
+    }
     await submitMessage(draft);
   }
 
-  function beginListening() {
+  function stopVoiceSession() {
+    voiceSessionRef.current = false;
+    voiceTurnInFlightRef.current = false;
+    voiceTranscriptRef.current = "";
+    voiceInterimRef.current = "";
+    clearTimeout(voiceSubmitTimerRef.current);
+    clearTimeout(voiceRestartTimerRef.current);
+    speechGenerationRef.current += 1;
+    recognitionRef.current?.abort?.();
+    recognitionRef.current = null;
+    setListening(false);
+    setVoiceSessionActive(false);
+    setVoiceStatus("");
+    releaseVoiceWakeLock();
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  }
+
+  function flushVoiceTranscript() {
+    clearTimeout(voiceSubmitTimerRef.current);
+    if (!voiceSessionRef.current || voiceTurnInFlightRef.current) return;
+    const transcript = [voiceTranscriptRef.current, voiceInterimRef.current].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    if (!transcript) {
+      scheduleVoiceRestart();
+      return;
+    }
+    voiceTranscriptRef.current = "";
+    voiceInterimRef.current = "";
+    voiceTurnInFlightRef.current = true;
+    setDraft("");
+    setVoiceStatus("Thinking...");
+    recognitionRef.current?.stop?.();
+    void submitMessageRef.current?.(transcript);
+  }
+
+  function startVoiceRecognition() {
     if (typeof window === "undefined") return;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
+      stopVoiceSession();
       reply("Voice input is not available in this browser, but the copilot still works with text.");
       return;
     }
-
-    if (listening) {
-      recognitionRef.current?.stop?.();
-      setListening(false);
+    if (
+      !voiceSessionRef.current ||
+      voiceTurnInFlightRef.current ||
+      runningRef.current ||
+      recognitionRef.current ||
+      document.visibilityState !== "visible"
+    ) {
       return;
     }
 
-    recognitionRef.current?.stop?.();
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
-    recognition.onstart = () => setListening(true);
-    recognition.onend = () => setListening(false);
-    recognition.onerror = () => {
+    recognition.onstart = () => {
+      setListening(true);
+      setVoiceStatus("Listening... talk naturally");
+      void requestVoiceWakeLock();
+    };
+    recognition.onend = () => {
+      if (recognitionRef.current === recognition) recognitionRef.current = null;
       setListening(false);
-      reply("I heard the mic fail. Try the text box or tap the mic again.");
+      if (!voiceSessionRef.current || voiceTurnInFlightRef.current) return;
+      if (voiceTranscriptRef.current || voiceInterimRef.current) {
+        clearTimeout(voiceSubmitTimerRef.current);
+        voiceSubmitTimerRef.current = setTimeout(flushVoiceTranscript, 500);
+        return;
+      }
+      setVoiceStatus("Still on — listening again...");
+      scheduleVoiceRestart(350);
+    };
+    recognition.onerror = (event) => {
+      const error = String(event?.error || "");
+      if (["not-allowed", "service-not-allowed", "audio-capture"].includes(error)) {
+        stopVoiceSession();
+        appendMessage("assistant", "I lost microphone access. Allow the mic for this site, then tap Talk once.", "uncertain");
+        return;
+      }
+      if (!["aborted", "no-speech"].includes(error)) {
+        setVoiceStatus("Mic paused — reconnecting...");
+      }
     };
     recognition.onresult = (event) => {
-      const transcript = Array.from(event.results || [])
-        .map((result) => result[0]?.transcript || "")
-        .join(" ")
-        .trim();
-      if (!transcript) return;
-      setDraft("");
-      void submitMessage(transcript);
+      let finalText = "";
+      let interimText = "";
+      for (const result of Array.from(event.results || [])) {
+        const text = result[0]?.transcript || "";
+        if (result.isFinal) finalText += ` ${text}`;
+        else interimText += ` ${text}`;
+      }
+      voiceTranscriptRef.current = finalText.trim();
+      voiceInterimRef.current = interimText.trim();
+      const visibleTranscript = [voiceTranscriptRef.current, voiceInterimRef.current].filter(Boolean).join(" ").trim();
+      if (!visibleTranscript) return;
+      setDraft(visibleTranscript);
+      setVoiceStatus("Listening... I’ll send after you pause");
+      clearTimeout(voiceSubmitTimerRef.current);
+      voiceSubmitTimerRef.current = setTimeout(flushVoiceTranscript, 1800);
     };
 
     recognitionRef.current = recognition;
-    recognition.start();
+    try {
+      recognition.start();
+    } catch {
+      recognitionRef.current = null;
+      scheduleVoiceRestart(500);
+    }
+  }
+
+  function beginListening() {
+    if (voiceSessionRef.current) {
+      stopVoiceSession();
+      return;
+    }
+    voiceSessionRef.current = true;
+    voiceTurnInFlightRef.current = false;
+    voiceTranscriptRef.current = "";
+    voiceInterimRef.current = "";
+    setVoiceSessionActive(true);
+    setVoiceStatus("Starting hands-free talk...");
+    void requestVoiceWakeLock();
+    startVoiceRecognition();
   }
 
   return (
@@ -2794,8 +2985,13 @@ function TaskCopilotPanel({
               {voiceReplies ? "Spoken replies on" : "Spoken replies off"}
             </button>
           ) : null}
-          <button type="button" className={cls("ghost-button", listening && "ghost-button--active")} onClick={beginListening} disabled={running}>
-            {listening ? (isMobile ? "Listening..." : "Stop voice input") : isMobile ? "Talk" : "Start voice input"}
+          <button
+            type="button"
+            className={cls("ghost-button", voiceSessionActive && "ghost-button--active")}
+            onClick={beginListening}
+            disabled={running && !voiceSessionActive}
+          >
+            {voiceSessionActive ? "End talk" : isMobile ? "Talk" : "Start hands-free talk"}
           </button>
         </div>
       </div>
@@ -2804,7 +3000,17 @@ function TaskCopilotPanel({
         Talk naturally. I can build task groups, turn voice notes into tasks, and remember what we just discussed when you say things like "remove those," "make them urgent," or "add this to that list."
       </p>
       {isMobile ? (
-        <p className="copilot-panel__mobile-hint">Follow up naturally. I will keep the context and ask before changing the board.</p>
+        <p className="copilot-panel__mobile-hint">Tap Talk once for hands-free conversation. I will listen again after every reply until you tap End talk.</p>
+      ) : null}
+
+      {voiceSessionActive ? (
+        <div className={cls("copilot-voice-status", listening && "copilot-voice-status--listening")} role="status" aria-live="polite">
+          <span className="copilot-voice-status__pulse" aria-hidden="true" />
+          <div>
+            <strong>{voiceStatus || "Hands-free talk is on"}</strong>
+            <small>Pause when you are done. Copilot will answer, then the mic comes back on.</small>
+          </div>
+        </div>
       ) : null}
 
       {showExamples ? (
@@ -2860,8 +3066,21 @@ function TaskCopilotPanel({
         <textarea
           rows={isMobile ? 2 : 3}
           value={draft}
-          placeholder={isMobile ? 'Say: "I handled trainer schedule"' : 'Example: "Push trainer schedule to Friday and make flyer urgent."'}
-          onChange={(event) => setDraft(event.target.value)}
+          placeholder={
+            voiceSessionActive
+              ? "Listening... keep talking, then pause to send."
+              : isMobile
+                ? 'Say: "I handled trainer schedule"'
+                : 'Example: "Push trainer schedule to Friday and make flyer urgent."'
+          }
+          onChange={(event) => {
+            const nextDraft = event.target.value;
+            setDraft(nextDraft);
+            if (voiceSessionRef.current) {
+              voiceTranscriptRef.current = nextDraft;
+              voiceInterimRef.current = "";
+            }
+          }}
         />
         <button type="submit" disabled={!draft.trim() || running}>
           {running ? "Working..." : isMobile ? "Send" : "Send to copilot"}
