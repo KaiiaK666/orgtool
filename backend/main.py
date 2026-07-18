@@ -16,7 +16,7 @@ DEFAULT_DATA_FILE = Path(__file__).resolve().parent / "data" / "store.json"
 DATA_FILE = Path(os.getenv("DEALER_DATA_FILE", str(DEFAULT_DATA_FILE))).expanduser()
 DATA_DIR = DATA_FILE.parent
 
-StatusValue = Literal["Not started", "Working on it", "Review", "Stuck", "Done"]
+StatusValue = Literal["Overdue", "Pending", "Done"]
 PriorityValue = Literal["Critical", "High", "Medium", "Low"]
 AudienceValue = Literal["All", "Sales", "BDC", "Service", "Leadership"]
 FieldTypeValue = Literal["text", "number", "date", "tag"]
@@ -435,9 +435,16 @@ def normalize_store(store: dict) -> dict:
             task.setdefault("category", "Task")
             task.setdefault("customer_name", "")
             task.setdefault("vehicle", "")
-            task.setdefault("status", "Not started")
+            legacy_status = str(task.get("status") or "Pending")
+            task["status"] = {
+                "Not started": "Pending",
+                "Working on it": "Pending",
+                "Review": "Pending",
+                "Stuck": "Pending",
+            }.get(legacy_status, legacy_status if legacy_status in {"Overdue", "Pending", "Done"} else "Pending")
             task.setdefault("priority", "Medium")
             task.setdefault("notes", "")
+            task.setdefault("screenshots", [])
             task.setdefault("effort", 1)
             task.setdefault("owner_id", None)
             task.setdefault("due_date", None)
@@ -569,7 +576,7 @@ class PermissionPatch(BaseModel):
 
 
 class LoginPayload(BaseModel):
-    user_id: int
+    username: str = Field(min_length=1, max_length=120)
     password: str = Field(min_length=1, max_length=120)
 
 
@@ -597,6 +604,8 @@ class BoardFieldCreate(BaseModel):
 class GroupCreate(BaseModel):
     board_id: int
     name: str = Field(min_length=2, max_length=80)
+    color: str = Field(default="#3156f5", max_length=20)
+    mode: str = Field(default="auto", max_length=20)
 
 
 class TaskCreate(BaseModel):
@@ -614,6 +623,7 @@ class TaskCreate(BaseModel):
     due_date: str | None = None
     effort: int = Field(default=1, ge=1, le=13)
     notes: str = Field(default="", max_length=1500)
+    screenshots: list[str] = Field(default_factory=list)
     custom_fields: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
 
 
@@ -631,6 +641,7 @@ class TaskPatch(BaseModel):
     due_date: str | None = None
     effort: int | None = Field(default=None, ge=1, le=13)
     notes: str | None = Field(default=None, max_length=1500)
+    screenshots: list[str] | None = None
     custom_fields: dict[str, str | int | float | bool | None] | None = None
 
 
@@ -653,7 +664,20 @@ def health() -> dict:
 @app.post("/api/login")
 def login(payload: LoginPayload) -> dict:
     store = read_store()
-    user = next((entry for entry in store["users"] if entry["id"] == payload.user_id and entry.get("active", True)), None)
+    login_key = "".join(character for character in payload.username.casefold() if character.isalnum())
+    user = next(
+        (
+            entry
+            for entry in store["users"]
+            if entry.get("active", True)
+            and login_key
+            in {
+                "".join(character for character in str(entry.get("username") or "").casefold() if character.isalnum()),
+                "".join(character for character in str(entry.get("name") or "").casefold() if character.isalnum()),
+            }
+        ),
+        None,
+    )
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if payload.password != user.get("password"):
@@ -790,7 +814,12 @@ def create_board_field(board_id: int, payload: BoardFieldCreate) -> dict:
 def create_group(payload: GroupCreate) -> dict:
     store = read_store()
     board = get_board_or_404(store, payload.board_id)
-    group = {"id": next_id(board["groups"]), "name": payload.name}
+    group = {
+        "id": next_id(board["groups"]),
+        "name": payload.name,
+        "color": payload.color,
+        "mode": payload.mode,
+    }
     board["groups"].append(group)
     write_store(store)
     return group

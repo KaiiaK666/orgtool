@@ -24,7 +24,13 @@ async function request(path, options = {}) {
     let message = "Request failed";
     try {
       const data = await response.json();
-      message = data.detail || message;
+      if (typeof data.detail === "string") {
+        message = data.detail;
+      } else if (Array.isArray(data.detail)) {
+        message = data.detail.map((item) => item?.msg || "Invalid request").join(" · ");
+      } else if (data.detail && typeof data.detail === "object") {
+        message = data.detail.message || message;
+      }
     } catch {
       message = response.statusText || message;
     }
@@ -37,7 +43,8 @@ async function request(path, options = {}) {
 function unwrap(key) {
   return async (...args) => {
     const data = await args[0];
-    return key ? data[key] : data;
+    if (!key) return data;
+    return data && Object.prototype.hasOwnProperty.call(data, key) ? data[key] : data;
   };
 }
 

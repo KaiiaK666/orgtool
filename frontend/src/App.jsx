@@ -20,6 +20,12 @@ import {
   updateTask,
   updateUser,
 } from "./api.js";
+import {
+  buildContextualCopilotPlan,
+  buildCopilotConversationContext,
+  rememberExecutedOperations,
+} from "./copilotContext.js";
+import { buildDictationPlan, shouldPreferDictationPlan } from "./dictationPlan.js";
 
 const SESSION_KEY = "orgtool-session";
 const THEME_KEY = "orgtool-theme";
@@ -1574,6 +1580,9 @@ function buildAssistantPlan(input, board, currentUser, workspace = {}) {
   const shoppingListPlan = buildShoppingListPlan(normalizedInput, board, currentUser);
   if (shoppingListPlan) return shoppingListPlan;
 
+  const dictationPlan = buildDictationPlan(input, board, currentUser);
+  if (dictationPlan) return dictationPlan;
+
   const clauses = splitAssistantClauses(normalizedInput);
   const operations = [];
   let context = { group: null };
@@ -1592,14 +1601,16 @@ function buildAssistantPlan(input, board, currentUser, workspace = {}) {
     if (hasDeleteIntent(normalizedInput) && (hasGroupIntent(normalizedInput) || findGroupMention(board, normalizedInput))) {
       return {
         mode: "answer",
-        message: 'I can remove task groups too. Try "delete Natasha", "delete the Natasha group", or "delete all task groups" and I will ask for confirmation before I change the board.',
+        needsClarification: true,
+        message: 'I’m not sure which task group you want removed. Try “delete Natasha,” “delete the Natasha group,” or “delete all task groups,” and I will ask before changing the board.',
       };
     }
 
     return {
       mode: "answer",
+      needsClarification: true,
       message:
-        'I did not want to guess wrong. I understand normal speech like "I need groceries: milk, eggs, bread", "got milk", "finish everything in shopping", "take eggs off the list", or "remember to call Miguel tomorrow".',
+        'I’m not sure what you want me to change yet, and I don’t want to guess. Try “I need groceries: milk, eggs, bread,” “finish everything in shopping,” or “remember to call Miguel tomorrow.”',
     };
   }
 
@@ -2291,6 +2302,90 @@ function BillingView({ billing, boards, busy, onStartCheckout, onManageBilling }
   );
 }
 
+function copilotOperationPreview(operation = {}) {
+  const changes = operation.changes || {};
+  if (operation.type === "create-task") {
+    return {
+      action: "Add task",
+      title: operation.name || "Untitled task",
+      meta: [operation.groupName, operation.dueDate ? `Due ${formatDate(operation.dueDate)}` : null, operation.priority].filter(Boolean),
+      tone: "add",
+    };
+  }
+  if (operation.type === "create-group") {
+    return { action: "Add group", title: operation.name || "New task group", meta: [], tone: "add" };
+  }
+  if (operation.type === "delete-task") {
+    return { action: "Delete task", title: operation.taskName || "Task", meta: [], tone: "danger" };
+  }
+  if (operation.type === "delete-group") {
+    return {
+      action: "Delete group",
+      title: operation.groupName || "Task group",
+      meta: operation.taskCount ? [`Includes ${operation.taskCount} task${operation.taskCount === 1 ? "" : "s"}`] : [],
+      tone: "danger",
+    };
+  }
+  if (operation.type === "update-task") {
+    const detail = changes.status
+      ? `Status → ${changes.status}`
+      : changes.priority
+        ? `Priority → ${changes.priority}`
+        : changes.due_date
+          ? `Due → ${formatDate(changes.due_date)}`
+          : changes.name
+            ? `Rename → ${changes.name}`
+            : "Update task details";
+    return { action: "Update task", title: operation.taskName || "Task", meta: [detail], tone: "update" };
+  }
+  if (operation.type === "bulk-update") {
+    return {
+      action: "Bulk update",
+      title: `${operation.taskCount || operation.taskIds?.length || 0} tasks`,
+      meta: [operation.groupName, changes.status ? `Status → ${changes.status}` : null].filter(Boolean),
+      tone: "update",
+    };
+  }
+  if (operation.type === "bulk-delete-tasks" || operation.type === "bulk-delete-groups") {
+    const count = operation.taskCount || operation.groupCount || 0;
+    return { action: "Bulk delete", title: `${count} item${count === 1 ? "" : "s"}`, meta: [operation.groupName].filter(Boolean), tone: "danger" };
+  }
+  if (operation.type === "create-board") {
+    return { action: "Add project", title: operation.name || "New project", meta: [], tone: "add" };
+  }
+  return { action: "Board change", title: describeAssistantOperation(operation), meta: [], tone: "update" };
+}
+
+function CopilotPlanPreview({ operations = [] }) {
+  const visible = operations.slice(0, 6);
+  return (
+    <div className="copilot-plan-list" aria-label="Proposed changes">
+      {visible.map((operation, index) => {
+        const preview = copilotOperationPreview(operation);
+        return (
+          <div className={cls("copilot-plan-item", `copilot-plan-item--${preview.tone}`)} key={`${operation.type}-${operation.taskId || operation.groupId || operation.name || index}-${index}`}>
+            <span className="copilot-plan-item__number">{index + 1}</span>
+            <span className="copilot-plan-item__body">
+              <small>{preview.action}</small>
+              <strong>{preview.title}</strong>
+              {preview.meta.length ? <span>{preview.meta.join(" · ")}</span> : null}
+            </span>
+          </div>
+        );
+      })}
+      {operations.length > visible.length ? <small className="copilot-plan-list__more">+{operations.length - visible.length} more changes</small> : null}
+    </div>
+  );
+}
+
+function copilotConfirmLabel(plan) {
+  const operations = plan?.operations || [];
+  const allTasks = operations.length && operations.every((operation) => operation.type === "create-task");
+  if (allTasks) return `Add ${operations.length} task${operations.length === 1 ? "" : "s"}`;
+  if (operations.length === 1 && operations[0].type === "create-group") return "Create task group";
+  return `Apply ${operations.length} change${operations.length === 1 ? "" : "s"}`;
+}
+
 function TaskCopilotPanel({
   board,
   boards,
@@ -2318,6 +2413,7 @@ function TaskCopilotPanel({
   const [running, setRunning] = useState(false);
   const [showExamples, setShowExamples] = useState(false);
   const recognitionRef = useRef(null);
+  const recentActionsRef = useRef([]);
   const samplePrompts = isMobile
     ? [
         "I need milk eggs bread",
@@ -2333,18 +2429,19 @@ function TaskCopilotPanel({
         "What should I handle first?",
       ];
   const visibleHistory = isMobile ? history.slice(-2) : history;
-  const showThread = !isMobile || history.length > 1 || Boolean(pendingPlan);
+  const showThread = !isMobile || (!pendingPlan && history.length > 1);
 
   useEffect(() => {
     setHistory([
       {
         role: "assistant",
-        text: `I'm watching ${board?.name || "this board"}. Talk naturally: quick thoughts, messy voice notes, and shorthand are fine. I will ask before I change anything.`,
+        text: `I'm watching ${board?.name || "this board"}. Talk naturally: quick thoughts, messy voice notes, and shorthand are fine. I remember what I just proposed or changed, so follow-ups like "remove those items" work. I will ask before I change anything.`,
       },
     ]);
     setPendingPlan(null);
     setDraft("");
     setShowExamples(false);
+    recentActionsRef.current = [];
   }, [board?.id]);
 
   useEffect(() => {
@@ -2356,8 +2453,8 @@ function TaskCopilotPanel({
     };
   }, []);
 
-  function appendMessage(role, text) {
-    setHistory((current) => [...current, { role, text }]);
+  function appendMessage(role, text, kind = "") {
+    setHistory((current) => [...current, { role, text, kind }]);
   }
 
   function speak(text) {
@@ -2369,8 +2466,8 @@ function TaskCopilotPanel({
     window.speechSynthesis.speak(utterance);
   }
 
-  function reply(text) {
-    appendMessage("assistant", text);
+  function reply(text, { kind = "" } = {}) {
+    appendMessage("assistant", text, kind);
     speak(text);
   }
 
@@ -2386,6 +2483,7 @@ function TaskCopilotPanel({
       let activeGroup = null;
       const createdGroups = new Map();
       const results = [];
+      const executedOperations = [];
 
       for (const operation of plan.operations) {
         if (operation.type === "create-board") {
@@ -2397,6 +2495,7 @@ function TaskCopilotPanel({
           });
           if (nextBoard) {
             results.push(`Created project "${nextBoard.name}".`);
+            executedOperations.push({ ...operation, boardId: nextBoard.id, boardName: nextBoard.name });
           }
           continue;
         }
@@ -2404,6 +2503,7 @@ function TaskCopilotPanel({
         if (operation.type === "update-board") {
           await onUpdateBoard(operation.changes, operation.boardId);
           results.push(`Updated project "${operation.boardName}".`);
+          executedOperations.push(operation);
           continue;
         }
 
@@ -2411,6 +2511,7 @@ function TaskCopilotPanel({
           const result = await onDeleteBoard(operation.boardId);
           if (result?.deleted) {
             results.push(`Deleted project "${operation.boardName}".`);
+            executedOperations.push(operation);
           }
           continue;
         }
@@ -2419,6 +2520,7 @@ function TaskCopilotPanel({
           const result = await onDeleteGroup(operation.groupId);
           if (result?.deleted) {
             results.push(`Deleted task group "${operation.groupName}".`);
+            executedOperations.push(operation);
           }
           activeGroup = null;
           continue;
@@ -2431,6 +2533,7 @@ function TaskCopilotPanel({
             deletedTasks += Number(result?.deleted_tasks || 0);
           }
           results.push(`Deleted ${operation.groupCount} task group${operation.groupCount === 1 ? "" : "s"}${deletedTasks ? ` and ${deletedTasks} task${deletedTasks === 1 ? "" : "s"}` : ""}.`);
+          executedOperations.push(operation);
           activeGroup = null;
           continue;
         }
@@ -2441,6 +2544,7 @@ function TaskCopilotPanel({
             createdGroups.set(normalizePhrase(operation.name), group);
             activeGroup = group;
             results.push(`Created task group "${group.name}".`);
+            executedOperations.push({ ...operation, groupId: group.id, groupName: group.name });
           }
           continue;
         }
@@ -2448,6 +2552,7 @@ function TaskCopilotPanel({
         if (operation.type === "update-group") {
           await onUpdateGroup(operation.groupId, operation.changes);
           results.push(`Updated task group "${operation.groupName}".`);
+          executedOperations.push(operation);
           continue;
         }
 
@@ -2457,6 +2562,7 @@ function TaskCopilotPanel({
             type: operation.fieldType,
           });
           results.push(`Created ${operation.fieldType} column "${operation.name}".`);
+          executedOperations.push(operation);
           continue;
         }
 
@@ -2478,6 +2584,15 @@ function TaskCopilotPanel({
           });
           activeGroup = targetGroup;
           results.push(`Created "${task?.name || operation.name}" in ${targetGroup.name}.`);
+          if (task) {
+            executedOperations.push({
+              ...operation,
+              taskId: task.id,
+              taskName: task.name || operation.name,
+              groupId: targetGroup.id,
+              groupName: targetGroup.name,
+            });
+          }
           continue;
         }
 
@@ -2485,6 +2600,7 @@ function TaskCopilotPanel({
           const result = await onDeleteTask(operation.taskId);
           if (result?.deleted) {
             results.push(`Deleted "${operation.taskName}".`);
+            executedOperations.push(operation);
           }
           continue;
         }
@@ -2494,12 +2610,14 @@ function TaskCopilotPanel({
             await onDeleteTask(taskId);
           }
           results.push(`Deleted ${operation.taskCount} task${operation.taskCount === 1 ? "" : "s"}${operation.groupName ? ` in ${operation.groupName}` : ""}.`);
+          executedOperations.push(operation);
           continue;
         }
 
         if (operation.type === "update-task") {
           await onUpdateTask(operation.taskId, operation.changes);
           results.push(`${sentenceCase(operation.taskName)} updated.`);
+          executedOperations.push(operation);
           continue;
         }
 
@@ -2508,9 +2626,11 @@ function TaskCopilotPanel({
             await onUpdateTask(taskId, operation.changes);
           }
           results.push(`Updated ${operation.taskCount} task${operation.taskCount === 1 ? "" : "s"}${operation.groupName ? ` in ${operation.groupName}` : ""}.`);
+          executedOperations.push(operation);
         }
       }
 
+      recentActionsRef.current = rememberExecutedOperations(recentActionsRef.current, executedOperations);
       setPendingPlan(null);
       reply(results.length ? spokenJoin(results) : "Done. I made the requested changes.");
       onAfterPlan?.();
@@ -2539,17 +2659,39 @@ function TaskCopilotPanel({
       return;
     }
 
-    setRunning(true);
-    let plan = null;
-    try {
-      plan = await onPlanCopilot?.(message);
-    } catch {
-      plan = null;
-    } finally {
-      setRunning(false);
+    const conversationContext = buildCopilotConversationContext({
+      history: [...history, { role: "user", text: message }],
+      pendingPlan,
+      recentActions: recentActionsRef.current,
+    });
+    const contextualPlan = buildContextualCopilotPlan(
+      message,
+      board,
+      currentUser,
+      recentActionsRef.current,
+      pendingPlan
+    );
+
+    if (contextualPlan?.contextAction === "replace-pending") {
+      setPendingPlan(contextualPlan.mode === "proposal" ? contextualPlan : null);
+      reply(contextualPlan.message);
+      return;
     }
-    const localPlan = buildAssistantPlan(message, board, currentUser, { users, boards });
-    if (!plan || (plan.mode === "answer" && localPlan?.mode === "proposal")) {
+
+    let plan = contextualPlan;
+    if (!plan) {
+      setRunning(true);
+      try {
+        plan = await onPlanCopilot?.(message, conversationContext);
+      } catch {
+        plan = null;
+      } finally {
+        setRunning(false);
+      }
+    }
+    const localPlan = buildAssistantPlan(message, board, currentUser, { users, boards, conversation: conversationContext });
+    const canReplaceAnswerWithFallback = plan?.source !== "ai" && plan?.mode === "answer" && localPlan?.mode === "proposal";
+    if (!plan || canReplaceAnswerWithFallback || shouldPreferDictationPlan(plan, localPlan)) {
       plan = localPlan;
     }
     if (plan.mode === "proposal") {
@@ -2558,7 +2700,7 @@ function TaskCopilotPanel({
       return;
     }
 
-    reply(plan.message);
+    reply(plan.message, { kind: plan.needsClarification ? "uncertain" : "" });
   }
 
   function beginListening() {
@@ -2624,10 +2766,10 @@ function TaskCopilotPanel({
       </div>
 
       <p className="copilot-panel__lead">
-        Talk naturally. I can turn voice notes into tasks, move dates, mark work done, clean completed items, change priority, add notes, build task groups, and answer what needs attention.
+        Talk naturally. I can build task groups, turn voice notes into tasks, and remember what we just discussed when you say things like "remove those," "make them urgent," or "add this to that list."
       </p>
       {isMobile ? (
-        <p className="copilot-panel__mobile-hint">Say one clear thing. I will ask before changing the board.</p>
+        <p className="copilot-panel__mobile-hint">Follow up naturally. I will keep the context and ask before changing the board.</p>
       ) : null}
 
       {showExamples ? (
@@ -2643,7 +2785,7 @@ function TaskCopilotPanel({
       {showThread ? (
         <div className="copilot-thread">
         {visibleHistory.map((entry, index) => (
-          <article key={`${entry.role}-${index}`} className={cls("copilot-bubble", `copilot-bubble--${entry.role}`)}>
+          <article key={`${entry.role}-${index}`} className={cls("copilot-bubble", `copilot-bubble--${entry.role}`, entry.kind && `copilot-bubble--${entry.kind}`)}>
             <strong>{entry.role === "assistant" ? "Copilot" : "You"}</strong>
             <p>{entry.text}</p>
           </article>
@@ -2653,14 +2795,27 @@ function TaskCopilotPanel({
 
       {pendingPlan ? (
         <div className="copilot-confirm">
-          <strong>Awaiting permission</strong>
-          <p>{pendingPlan.message}</p>
+          <div className="copilot-confirm__head">
+            <div>
+              <span className="copilot-confirm__eyebrow">Ready for review</span>
+              <strong>{pendingPlan.operations.length} proposed change{pendingPlan.operations.length === 1 ? "" : "s"}</strong>
+            </div>
+            <small>Nothing changes until you confirm</small>
+          </div>
+          {pendingPlan.warnings?.length ? (
+            <p className="copilot-confirm__warning">{pendingPlan.warnings[0]}</p>
+          ) : pendingPlan.skippedFragments?.length ? (
+            <p className="copilot-confirm__warning">
+              I left out “{pendingPlan.skippedFragments[0]}” because it sounded unfinished. Send the rest when you are ready.
+            </p>
+          ) : null}
+          <CopilotPlanPreview operations={pendingPlan.operations} />
           <div className="copilot-confirm__actions">
             <button type="button" onClick={() => executePlan(pendingPlan)} disabled={running}>
-              {running ? "Working..." : "Yes, do it"}
+              {running ? "Working..." : copilotConfirmLabel(pendingPlan)}
             </button>
             <button type="button" className="ghost-button" onClick={handleCancelPlan} disabled={running}>
-              No, cancel
+              Cancel
             </button>
           </div>
         </div>
@@ -4174,12 +4329,13 @@ export default function App() {
     scrollToWorkspaceSection(".add-task-inline--mobile, .add-task-inline");
   }
 
-  async function handlePlanCopilot(message) {
+  async function handlePlanCopilot(message, context = {}) {
     if (!activeBoard || !currentUser) return null;
     const plan = await planCopilot({
       message,
       board_id: activeBoard.id,
       user_id: currentUser.id,
+      context,
     });
     return plan?.mode ? plan : null;
   }

@@ -2398,6 +2398,11 @@ a {
   background: color-mix(in srgb, var(--accent-soft) 50%, var(--surface));
 }
 
+.copilot-bubble--uncertain {
+  border-color: color-mix(in srgb, #f59e0b 52%, var(--line));
+  background: color-mix(in srgb, #f59e0b 9%, var(--surface));
+}
+
 .copilot-bubble--user {
   background: var(--surface);
 }
@@ -5956,6 +5961,169 @@ body {
 
   .stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Copilot review: show the actual changes instead of repeating a long transcript. */
+.copilot-confirm {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line));
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface) 92%, var(--accent-soft));
+}
+
+.copilot-confirm__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.copilot-confirm__head > div {
+  display: grid;
+  gap: 2px;
+}
+
+.copilot-confirm__head strong {
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.copilot-confirm__head > small {
+  max-width: 170px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.copilot-confirm__eyebrow {
+  color: var(--accent);
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.copilot-confirm__warning {
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, #f59e0b 28%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, #f59e0b 9%, var(--surface));
+  color: var(--text);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.copilot-plan-list {
+  display: grid;
+  gap: 7px;
+}
+
+.copilot-plan-item {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface);
+}
+
+.copilot-plan-item__number {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 850;
+}
+
+.copilot-plan-item--danger .copilot-plan-item__number {
+  background: color-mix(in srgb, #ef4444 13%, var(--surface));
+  color: #dc2626;
+}
+
+.copilot-plan-item__body {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.copilot-plan-item__body small {
+  color: var(--accent);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.copilot-plan-item--danger .copilot-plan-item__body small {
+  color: #dc2626;
+}
+
+.copilot-plan-item__body strong,
+.copilot-plan-item__body > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copilot-plan-item__body strong {
+  font-size: 0.88rem;
+}
+
+.copilot-plan-item__body > span,
+.copilot-plan-list__more {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.copilot-plan-list__more {
+  padding-left: 4px;
+}
+
+.copilot-confirm__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.copilot-confirm__actions > button {
+  min-height: 42px;
+  border-radius: 13px;
+}
+
+@media (max-width: 520px) {
+  .workspace-shell--mobile .copilot-confirm {
+    gap: 10px;
+    padding: 11px;
+    border-radius: 16px;
+  }
+
+  .workspace-shell--mobile .copilot-confirm__head > small {
+    display: none;
+  }
+
+  .workspace-shell--mobile .copilot-plan-item {
+    padding: 8px;
+  }
+
+  .workspace-shell--mobile .copilot-confirm__actions {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
+  }
+
+  .workspace-shell--mobile .copilot-confirm__actions > * {
+    width: 100%;
   }
 }
 
