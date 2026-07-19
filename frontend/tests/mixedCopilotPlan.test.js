@@ -9,13 +9,14 @@ const board = {
   id: 1,
   name: "BDC Follow Up",
   groups: [
-    { id: 11, name: "Open" },
+    { id: 11, name: "Today" },
     { id: 12, name: "Weekend Project" },
-    { id: 13, name: "Completed" },
+    { id: 13, name: "Done" },
+    { id: 14, name: "This Week" },
   ],
   tasks: [
     { id: 101, group_id: 11, owner_id: 7, name: "Milk", status: "Pending", priority: "Medium", due_date: "2026-07-18" },
-    { id: 102, group_id: 11, owner_id: 7, name: "Finish CSI", status: "Pending", priority: "High", due_date: "2026-07-18" },
+    { id: 102, group_id: 14, owner_id: 7, name: "Finish CSI", status: "Pending", priority: "High", due_date: "2026-07-18" },
     { id: 103, group_id: 11, owner_id: 8, name: "Other owner's task", status: "Pending", priority: "Medium", due_date: "2026-07-18" },
     { id: 104, group_id: 11, owner_id: 7, name: "Tomorrow task", status: "Pending", priority: "Medium", due_date: "2026-07-19" },
     { id: 105, group_id: 13, owner_id: 7, name: "Old follow-up", status: "Done", priority: "Low", due_date: "2026-07-17" },

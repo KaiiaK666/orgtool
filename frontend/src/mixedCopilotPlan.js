@@ -102,6 +102,18 @@ function findGroup(board, clause) {
   return null;
 }
 
+function scopedActionGroup(board, clause) {
+  const group = findGroup(board, clause);
+  if (!group) return null;
+  const label = normalize(group.name);
+  const canBeStatusOrDate = /^(?:today|this week|done|complete|completed|pending|overdue)$/.test(label);
+  if (!canBeStatusOrDate) return group;
+  const text = normalize(clause);
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, " +");
+  const explicitlyScoped = new RegExp(`\\b(?:in|inside|under|from|within) +(?:the +)?${escapedLabel}\\b|\\b${escapedLabel} +(?:group|list|project|section)\\b`).test(text);
+  return explicitlyScoped ? group : null;
+}
+
 function groupForTask(board, task) {
   return (board?.groups || []).find((group) => Number(group.id) === Number(task?.group_id)) || null;
 }
@@ -141,7 +153,7 @@ function parseBulkStatus(clause, board, currentUser, now) {
   const isBulk = /\b(?:all|every|everything|whole|entire)\b/i.test(clause);
   if (!targetStatus || !isBulk || !/\b(?:mark|set|change|update|complete|finish|done)\b/i.test(clause)) return null;
 
-  const group = findGroup(board, clause);
+  const group = scopedActionGroup(board, clause);
   const myOnly = /\b(?:my tasks?|mine|assigned to me)\b/i.test(clause);
   const todayOnly = /\b(?:today|today['â€™]?s)\b/i.test(clause);
   const dueDate = todayOnly ? localIsoDate(now) : null;
@@ -171,7 +183,7 @@ function parseBulkStatus(clause, board, currentUser, now) {
 
 function parseBulkDelete(clause, board, currentUser, now) {
   if (!/\b(?:delete|remove|clear|trash|erase)\b/i.test(clause) || !/\b(?:all|every|everything|completed|done)\b/i.test(clause)) return null;
-  const group = findGroup(board, clause);
+  const group = scopedActionGroup(board, clause);
   const myOnly = /\b(?:my tasks?|mine|assigned to me)\b/i.test(clause);
   const todayOnly = /\b(?:today|today['â€™]?s)\b/i.test(clause);
   const dueDate = todayOnly ? localIsoDate(now) : null;
