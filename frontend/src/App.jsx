@@ -30,6 +30,7 @@ import {
   rememberExecutedOperations,
 } from "./copilotContext.js";
 import { buildDictationPlan, shouldPreferDictationPlan } from "./dictationPlan.js";
+import { buildMixedCopilotPlan } from "./mixedCopilotPlan.js";
 
 const SESSION_KEY = "orgtool-session";
 const THEME_KEY = "orgtool-theme";
@@ -2797,13 +2798,14 @@ function TaskCopilotPanel({
         setCopilotRunning(false);
       }
     }
-    const localPlan = buildAssistantPlan(plannerMessage, board, currentUser, { users, boards, conversation: conversationContext });
+    const mixedLocalPlan = buildMixedCopilotPlan(plannerMessage, board, currentUser);
+    const localPlan = mixedLocalPlan || buildAssistantPlan(plannerMessage, board, currentUser, { users, boards, conversation: conversationContext });
     if (complexTurn && plan?.source !== "ai") {
-      plan = {
+      plan = mixedLocalPlan || {
         mode: "answer",
         needsClarification: true,
         message:
-          "I heard several different changes in that sentence, and I don't want to flatten them into the wrong action. My full planner isn't available right now, so try again in a moment or send the changes one at a time.",
+          "I caught more than one change, but I could not safely match every part yet. Clarify the part I missed and I will keep the rest of your request together.",
         operations: [],
       };
     } else {
