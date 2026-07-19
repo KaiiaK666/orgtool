@@ -10,7 +10,7 @@ const board = {
   name: "BDC Follow Up",
   groups: [
     { id: 11, name: "Open" },
-    { id: 12, name: "Weekend Tasks" },
+    { id: 12, name: "Weekend Project" },
     { id: 13, name: "Completed" },
   ],
   tasks: [
@@ -44,12 +44,12 @@ test("handles the exact investor-demo prompt atomically", () => {
   assert.deepEqual(plan.operations[0].taskIds, [101, 102], "only the current user's tasks due today are completed");
   assert.deepEqual(plan.operations[0].changes, { status: "Done" });
   assert.equal(plan.operations[1].groupId, 12);
-  assert.equal(plan.operations[1].groupName, "Weekend Tasks");
+  assert.equal(plan.operations[1].groupName, "Weekend Project");
   assert.equal(plan.operations[1].name, "Get snake food");
 });
 
 test("combines a named completion and a task addition", () => {
-  const plan = buildMixedCopilotPlan("mark Milk done and add call Miguel to Weekend Tasks", board, currentUser, { now });
+  const plan = buildMixedCopilotPlan("mark Milk done and add call Miguel to Weekend Project", board, currentUser, { now });
   assert.deepEqual(plan.operations.map((operation) => operation.type), ["update-task", "create-task"]);
   assert.equal(plan.operations[0].taskId, 101);
   assert.equal(plan.operations[1].name, "Call Miguel");
@@ -57,14 +57,14 @@ test("combines a named completion and a task addition", () => {
 });
 
 test("combines rescheduling and creating work", () => {
-  const plan = buildMixedCopilotPlan("push Finish CSI to Friday and add send CSI recap to Weekend Tasks", board, currentUser, { now });
+  const plan = buildMixedCopilotPlan("push Finish CSI to Friday and add send CSI recap to Weekend Project", board, currentUser, { now });
   assert.deepEqual(plan.operations.map((operation) => operation.type), ["update-task", "create-task"]);
   assert.equal(plan.operations[0].changes.due_date, "2026-07-24");
   assert.equal(plan.operations[1].name, "Send CSI recap");
 });
 
 test("combines completed-task cleanup and replacement work", () => {
-  const plan = buildMixedCopilotPlan("remove all completed tasks and add archive recap to Weekend Tasks", board, currentUser, { now });
+  const plan = buildMixedCopilotPlan("remove all completed tasks and add archive recap to Weekend Project", board, currentUser, { now });
   assert.deepEqual(plan.operations.map((operation) => operation.type), ["bulk-delete-tasks", "create-task"]);
   assert.deepEqual(plan.operations[0].taskIds, [105]);
   assert.equal(plan.operations[1].name, "Archive recap");

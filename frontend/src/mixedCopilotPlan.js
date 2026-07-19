@@ -89,7 +89,17 @@ function findTask(board, clause) {
 }
 
 function findGroup(board, clause) {
-  return findNamed(board?.groups || [], clause);
+  const groups = board?.groups || [];
+  const direct = findNamed(groups, clause);
+  if (direct) return direct;
+  const text = normalize(clause);
+  const semanticScopes = ["weekend", "shopping", "grocery"];
+  for (const scope of semanticScopes) {
+    if (!new RegExp(`\\b${scope}\\b`).test(text)) continue;
+    const semanticMatch = groups.find((group) => new RegExp(`\\b${scope}\\b`).test(normalize(group?.name)));
+    if (semanticMatch) return semanticMatch;
+  }
+  return null;
 }
 
 function groupForTask(board, task) {
